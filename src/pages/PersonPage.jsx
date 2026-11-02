@@ -1,20 +1,45 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { CATEGORIES, TRANSACTION_TYPES, formatNumber, formatCurrency, formatDate, getBalanceStatus, getTodayDate, CALC_TYPE_LABELS } from '../lib/constants'
 import {
-  getPersonById, getCalculationsByPerson, getEntriesByCalculation,
-  getPersonFinancialSummary, getPersonQuantitySummary,
-  createCalculation, createEntry, updateEntry, softDeleteEntry,
-  generateCSV, getEntriesByPerson
+  CATEGORIES,
+  TRANSACTION_TYPES,
+  formatNumber,
+  formatCurrency,
+  formatDate,
+  getBalanceStatus,
+  getTodayDate,
+  CALC_TYPE_LABELS,
+} from '../lib/constants'
+import {
+  getPersonById,
+  getCalculationsByPerson,
+  getEntriesByCalculation,
+  getPersonFinancialSummary,
+  getPersonQuantitySummary,
+  createCalculation,
+  createEntry,
+  updateEntry,
+  softDeleteEntry,
+  generateCSV,
+  getEntriesByPerson,
 } from '../lib/api'
 import { useSettings } from '../contexts/SettingsContext'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { toast } from '../components/Toast'
 import {
-  ArrowLeft, Plus, X, Calendar, Hash, DollarSign,
-  Download, MoreVertical, Pencil, Trash2, ChevronDown,
-  FileText, TrendingUp, TrendingDown, Minus
+  ArrowLeft,
+  Plus,
+  X,
+  Calendar,
+  Hash,
+  DollarSign,
+  Download,
+  Pencil,
+  Trash2,
+  Clock,
+  ArrowUpDown,
+  Phone,
 } from 'lucide-react'
 
 export default function PersonPage() {
@@ -28,18 +53,19 @@ export default function PersonPage() {
   const [financialSummary, setFinancialSummary] = useState(null)
   const [quantitySummary, setQuantitySummary] = useState({})
   const [loading, setLoading] = useState(true)
+  const [entrySortOrder, setEntrySortOrder] = useState('newest') // 'newest' | 'oldest'
 
   // Modals
   const [showAddCalc, setShowAddCalc] = useState(false)
-  const [showAddEntry, setShowAddEntry] = useState(null) // calculation object or null
-  const [showEditEntry, setShowEditEntry] = useState(null) // entry object or null
+  const [showAddEntry, setShowAddEntry] = useState(null)
+  const [showEditEntry, setShowEditEntry] = useState(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null)
 
   // Add Calculation form
   const [calcName, setCalcName] = useState('')
   const [calcType, setCalcType] = useState('quantity')
 
-  // Add Entry form
+  // Add/Edit Entry form
   const [entryDate, setEntryDate] = useState(getTodayDate())
   const [entryQuantity, setEntryQuantity] = useState('')
   const [entryAmount, setEntryAmount] = useState('')
@@ -61,7 +87,7 @@ export default function PersonPage() {
 
     // Load entries for each calculation
     const eMap = {}
-    if (calcs) {
+    if (calcs && calcs.length > 0) {
       await Promise.all(
         calcs.map(async (c) => {
           const { data: entries } = await getEntriesByCalculation(c.id)
@@ -91,7 +117,7 @@ export default function PersonPage() {
   // Handle add calculation
   const handleAddCalculation = async () => {
     if (!calcName.trim()) {
-      toast('Please enter calculation name', 'warning')
+      toast('Please enter column name', 'warning')
       return
     }
     setSaving(true)
@@ -103,7 +129,7 @@ export default function PersonPage() {
         sort_order: calculations.length,
       })
       if (error) throw error
-      toast('New calculation added', 'success')
+      toast('New column added', 'success')
       setShowAddCalc(false)
       setCalcName('')
       setCalcType('quantity')
@@ -182,7 +208,7 @@ export default function PersonPage() {
       const { error } = await updateEntry(entry.id, updates)
       if (error) throw error
 
-      toast('Entry updated successfully', 'success')
+      toast('Entry updated', 'success')
       setShowEditEntry(null)
       resetEntryForm()
       await loadData()
@@ -199,7 +225,7 @@ export default function PersonPage() {
     try {
       const { error } = await softDeleteEntry(showDeleteConfirm.id)
       if (error) throw error
-      toast('Entry deleted successfully', 'success')
+      toast('Entry deleted', 'success')
       setShowDeleteConfirm(null)
       await loadData()
     } catch (err) {
@@ -217,7 +243,7 @@ export default function PersonPage() {
 
   const openEditEntry = (entry) => {
     if (!settings.allow_edit) {
-      toast('Edit permission disabled. Enable it from Settings.', 'warning')
+      toast('Enable editing permission from Settings first.', 'warning')
       return
     }
     setEntryDate(entry.entry_date)
@@ -243,67 +269,120 @@ export default function PersonPage() {
     a.download = `${person.name}_hisab.csv`
     a.click()
     URL.revokeObjectURL(url)
-    toast('Downloading CSV...', 'success')
+    toast('CSV downloaded successfully', 'success')
   }
 
-  if (loading) return <LoadingSpinner message="Loading accounts..." />
-  if (!person) return <div className="min-h-screen flex items-center justify-center text-gray-500">Person not found</div>
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <LoadingSpinner message="Loading account..." />
+      </div>
+    )
+  }
+
+  if (!person) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 text-center">
+        <div>
+          <p className="text-sm font-semibold text-neutral-500 mb-3">Person not found</p>
+          <button
+            onClick={() => navigate('/')}
+            className="px-4 py-2 rounded-xl bg-neutral-900 text-white text-xs font-medium"
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   const balanceStatus = financialSummary ? getBalanceStatus(financialSummary.net_balance) : null
 
   return (
-    <div className="min-h-screen bg-gray-50 safe-area-top safe-area-bottom pb-24">
-      {/* Header */}
-      <div className="bg-gradient-to-br from-primary-800 to-primary-900 px-4 pt-4 pb-5 rounded-b-3xl">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
+    <div className="min-h-screen bg-neutral-50/70 safe-area-top safe-area-bottom pb-24">
+      {/* Minimalist Header */}
+      <div className="bg-white/90 backdrop-blur-md border-b border-neutral-200/70 px-4 py-3 sticky top-0 z-20">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={() => navigate(-1)}
-              className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center"
+              className="w-9 h-9 rounded-xl bg-neutral-100 hover:bg-neutral-200/70 active:scale-95 transition-all flex items-center justify-center text-neutral-700 shrink-0"
             >
-              <ArrowLeft className="w-5 h-5 text-white" />
+              <ArrowLeft className="w-4 h-4" />
             </button>
-            <div>
-              <h1 className="text-lg font-bold text-white">{person.name}</h1>
-              <p className="text-xs text-primary-200">{category?.name}</p>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h1 className="text-base font-semibold text-neutral-900 tracking-tight truncate">
+                  {person.name}
+                </h1>
+                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-600 border border-neutral-200/60 shrink-0">
+                  {category?.name}
+                </span>
+              </div>
+              {person.phone && (
+                <p className="text-[11px] text-neutral-400 font-mono flex items-center gap-1 mt-0.5">
+                  <Phone className="w-2.5 h-2.5" />
+                  {person.phone}
+                </p>
+              )}
             </div>
           </div>
-          <button
-            onClick={handleExport}
-            className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center"
-          >
-            <Download className="w-5 h-5 text-white" />
-          </button>
-        </div>
 
-        {/* Financial Summary */}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleExport}
+              title="Download CSV"
+              className="w-9 h-9 rounded-xl bg-neutral-100 hover:bg-neutral-200/70 active:scale-95 transition-all flex items-center justify-center text-neutral-700"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="px-4 py-4 max-w-lg mx-auto space-y-4">
+        {/* Financial Summary Card */}
         {financialSummary && (
-          <div className={`rounded-2xl p-4 border ${balanceStatus?.border} ${balanceStatus?.bg}`}>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-medium text-gray-500 uppercase">Total Balance</span>
-              <span className={`text-xs font-semibold px-2 py-1 rounded-full ${balanceStatus?.bg} ${balanceStatus?.color}`}>
+          <div className="bg-white rounded-2xl p-4 border border-neutral-200/70 shadow-2xs space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">
+                Net Balance
+              </span>
+              <span
+                className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border ${balanceStatus?.border} ${balanceStatus?.bg} ${balanceStatus?.color}`}
+              >
                 {balanceStatus?.label}
               </span>
             </div>
-            <p className={`text-2xl font-bold ${balanceStatus?.color} mb-3`}>
+
+            <p className={`text-2xl font-bold tracking-tight ${balanceStatus?.color}`}>
               {formatCurrency(Math.abs(financialSummary.net_balance))}
             </p>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="bg-white/70 rounded-lg p-2">
-                <span className="text-gray-500">Receivable</span>
-                <p className="font-semibold text-green-600">{formatCurrency(financialSummary.total_receivable)}</p>
+
+            <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-neutral-100">
+              <div className="p-2 rounded-xl bg-emerald-50/50 border border-emerald-100/60">
+                <span className="text-[10px] text-neutral-500 block">Receivable</span>
+                <p className="font-bold text-emerald-700 text-xs">
+                  {formatCurrency(financialSummary.total_receivable)}
+                </p>
               </div>
-              <div className="bg-white/70 rounded-lg p-2">
-                <span className="text-gray-500">Received</span>
-                <p className="font-semibold text-blue-600">{formatCurrency(financialSummary.total_received)}</p>
+              <div className="p-2 rounded-xl bg-blue-50/50 border border-blue-100/60">
+                <span className="text-[10px] text-neutral-500 block">Received</span>
+                <p className="font-bold text-blue-700 text-xs">
+                  {formatCurrency(financialSummary.total_received)}
+                </p>
               </div>
-              <div className="bg-white/70 rounded-lg p-2">
-                <span className="text-gray-500">Payable</span>
-                <p className="font-semibold text-red-600">{formatCurrency(financialSummary.total_payable)}</p>
+              <div className="p-2 rounded-xl bg-rose-50/50 border border-rose-100/60">
+                <span className="text-[10px] text-neutral-500 block">Payable</span>
+                <p className="font-bold text-rose-700 text-xs">
+                  {formatCurrency(financialSummary.total_payable)}
+                </p>
               </div>
-              <div className="bg-white/70 rounded-lg p-2">
-                <span className="text-gray-500">Paid</span>
-                <p className="font-semibold text-orange-600">{formatCurrency(financialSummary.total_paid)}</p>
+              <div className="p-2 rounded-xl bg-amber-50/50 border border-amber-100/60">
+                <span className="text-[10px] text-neutral-500 block">Paid</span>
+                <p className="font-bold text-amber-700 text-xs">
+                  {formatCurrency(financialSummary.total_paid)}
+                </p>
               </div>
             </div>
           </div>
@@ -311,154 +390,191 @@ export default function PersonPage() {
 
         {/* Quantity Summaries */}
         {Object.keys(quantitySummary).length > 0 && (
-          <div className="flex gap-2 mt-3 overflow-x-auto">
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
             {Object.entries(quantitySummary).map(([name, total]) => (
-              <div key={name} className="bg-white/15 backdrop-blur rounded-xl px-3 py-2 border border-white/10 shrink-0">
-                <span className="text-xs text-primary-200 block">{name}</span>
-                <span className="text-sm font-bold text-white">{formatNumber(total)}</span>
+              <div
+                key={name}
+                className="bg-white rounded-xl px-3 py-2 border border-neutral-200/70 shadow-2xs shrink-0 flex items-center gap-2"
+              >
+                <div className="w-2 h-2 rounded-full bg-amber-500" />
+                <div>
+                  <span className="text-[10px] text-neutral-400 block font-medium">{name}</span>
+                  <span className="text-xs font-bold text-neutral-900">{formatNumber(total)}</span>
+                </div>
               </div>
             ))}
           </div>
         )}
-      </div>
 
-      {/* Calculation Columns */}
-      <div className="px-4 mt-4">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Calculation Columns</h2>
-          <button
-            onClick={() => setShowAddCalc(true)}
-            className="flex items-center gap-1 text-xs font-semibold text-primary-600 bg-primary-50 px-3 py-1.5 rounded-full"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            New Column
-          </button>
+        {/* Calculations Section Header */}
+        <div className="flex items-center justify-between pt-2">
+          <div className="flex items-center gap-2">
+            <h2 className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+              Calculation Columns
+            </h2>
+            <span className="text-[11px] text-neutral-400">({calculations.length})</span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            {/* Sort order toggle for timeline entries */}
+            <button
+              onClick={() => setEntrySortOrder((o) => (o === 'newest' ? 'oldest' : 'newest'))}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-neutral-100 hover:bg-neutral-200/70 text-neutral-600 text-[11px] font-medium transition-colors"
+              title="Toggle entry sorting order"
+            >
+              <ArrowUpDown className="w-3 h-3 text-neutral-500" />
+              <span>{entrySortOrder === 'newest' ? 'Newest' : 'Oldest'}</span>
+            </button>
+
+            <button
+              onClick={() => setShowAddCalc(true)}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-black text-white text-[11px] font-medium shadow-2xs active:scale-95 transition-all"
+            >
+              <Plus className="w-3 h-3" />
+              <span>Column</span>
+            </button>
+          </div>
         </div>
 
-        {/* The main timeline columns - side by side horizontally scrollable */}
-        <div className="flex gap-3 overflow-x-auto pb-4 snap-x snap-mandatory -mx-4 px-4">
+        {/* Calculation Columns - Horizontally Scrollable Cards */}
+        <div className="flex gap-3 overflow-x-auto pb-4 snap-x snap-mandatory -mx-4 px-4 scrollbar-none">
           {calculations.map((calc) => {
-            const entries = entriesMap[calc.id] || []
-            const total = calc.calc_type === 'quantity'
-              ? entries.reduce((s, e) => s + (Number(e.quantity) || 0), 0)
-              : entries.reduce((s, e) => {
-                  const amt = Number(e.amount) || 0
-                  if (e.transaction_type === 'i_will_receive' || e.transaction_type === 'i_paid_them') return s + amt
-                  return s - amt
-                }, 0)
+            const rawEntries = entriesMap[calc.id] || []
+            const entries = [...rawEntries].sort((a, b) => {
+              const dateA = new Date(a.entry_date).getTime()
+              const dateB = new Date(b.entry_date).getTime()
+              return entrySortOrder === 'newest' ? dateB - dateA : dateA - dateB
+            })
+
+            const total =
+              calc.calc_type === 'quantity'
+                ? entries.reduce((s, e) => s + (Number(e.quantity) || 0), 0)
+                : entries.reduce((s, e) => {
+                    const amt = Number(e.amount) || 0
+                    if (e.transaction_type === 'i_will_receive' || e.transaction_type === 'i_paid_them')
+                      return s + amt
+                    return s - amt
+                  }, 0)
 
             return (
               <div
                 key={calc.id}
-                className="min-w-[160px] w-[47vw] max-w-[200px] shrink-0 snap-start"
+                className="min-w-[170px] w-[50vw] max-w-[210px] shrink-0 snap-start flex flex-col"
               >
-                {/* Column Header */}
-                <div className={`rounded-xl p-3 mb-2 ${calc.calc_type === 'money' ? 'bg-blue-50 border border-blue-100' : 'bg-amber-50 border border-amber-100'}`}>
-                  <h3 className="text-xs font-bold text-gray-800 truncate">{calc.name}</h3>
-                  <div className="flex items-center justify-between mt-1">
-                    <span className={`text-sm font-bold ${calc.calc_type === 'money' ? 'text-blue-700' : 'text-amber-700'}`}>
+                {/* Column Card Header */}
+                <div
+                  className={`rounded-2xl p-3 mb-2.5 border transition-all ${
+                    calc.calc_type === 'money'
+                      ? 'bg-blue-50/70 border-blue-200/70'
+                      : 'bg-amber-50/70 border-amber-200/70'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1 mb-1">
+                    <h3 className="text-xs font-bold text-neutral-900 truncate">{calc.name}</h3>
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">
+                      {calc.calc_type === 'money' ? '₹' : '#'}
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between">
+                    <span
+                      className={`text-sm font-extrabold ${
+                        calc.calc_type === 'money' ? 'text-blue-700' : 'text-amber-800'
+                      }`}
+                    >
                       {calc.calc_type === 'money' ? formatCurrency(total) : formatNumber(total)}
                     </span>
-                    <span className="text-[10px] text-gray-400 uppercase">
-                      {CALC_TYPE_LABELS[calc.calc_type]?.label}
+                    <span className="text-[10px] text-neutral-400">
+                      {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
                     </span>
                   </div>
                 </div>
 
-                {/* Timeline entries */}
-                <div className="relative">
-                  {entries.length > 0 && (
-                    <div className="absolute left-[50%] top-2 bottom-12 w-0.5 bg-gradient-to-b from-gray-200 to-gray-100 -translate-x-1/2 z-0" />
-                  )}
+                {/* Add Entry Quick Trigger */}
+                <button
+                  onClick={() => {
+                    resetEntryForm()
+                    setShowAddEntry(calc)
+                  }}
+                  className={`w-full py-2 mb-2 rounded-xl border border-dashed flex items-center justify-center gap-1.5 text-xs font-semibold active:scale-95 transition-all ${
+                    calc.calc_type === 'money'
+                      ? 'border-blue-300 text-blue-700 bg-white hover:bg-blue-50/60'
+                      : 'border-amber-300 text-amber-700 bg-white hover:bg-amber-50/60'
+                  }`}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Entry</span>
+                </button>
 
-                  <div className="relative z-10 space-y-1.5">
-                    {entries.map((entry, idx) => (
+                {/* Entries Timeline List */}
+                <div className="space-y-1.5 flex-1 overflow-y-auto max-h-[50vh] pr-0.5">
+                  {entries.length === 0 ? (
+                    <div className="text-center py-6 px-2 bg-white rounded-xl border border-neutral-100">
+                      <p className="text-[11px] text-neutral-400">No entries yet</p>
+                    </div>
+                  ) : (
+                    entries.map((entry) => (
                       <div
                         key={entry.id}
-                        className="entry-card group relative"
+                        className="bg-white rounded-xl p-2.5 border border-neutral-200/70 shadow-2xs space-y-1"
                       >
-                        <div
-                          className={`rounded-xl p-2.5 border bg-white shadow-sm transition-all ${
-                            calc.calc_type === 'money' && entry.transaction_type
-                              ? TRANSACTION_TYPES[entry.transaction_type]?.border || 'border-gray-100'
-                              : 'border-gray-100'
-                          }`}
-                        >
-                          {/* Date */}
-                          <div className="flex items-center gap-1 mb-1">
-                            <Calendar className="w-3 h-3 text-gray-400" />
-                            <span className="text-[10px] text-gray-400 font-medium">{formatDate(entry.entry_date)}</span>
-                          </div>
-
-                          {/* Value */}
-                          {calc.calc_type === 'quantity' ? (
-                            <p className="text-sm font-bold text-gray-800">{formatNumber(entry.quantity)}</p>
-                          ) : (
-                            <>
-                              <p className={`text-sm font-bold ${TRANSACTION_TYPES[entry.transaction_type]?.color || 'text-gray-800'}`}>
-                                {formatCurrency(entry.amount)}
-                              </p>
-                              <span className={`text-[9px] font-medium mt-0.5 block ${TRANSACTION_TYPES[entry.transaction_type]?.color || 'text-gray-400'}`}>
-                                {TRANSACTION_TYPES[entry.transaction_type]?.label}
-                              </span>
-                            </>
-                          )}
-
-                          {/* Description */}
-                          {entry.description && (
-                            <p className="text-[10px] text-gray-400 mt-1 truncate">{entry.description}</p>
-                          )}
-
-                          {/* Edit/Delete buttons - show on tap */}
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-neutral-400 font-mono flex items-center gap-1">
+                            <Calendar className="w-2.5 h-2.5" />
+                            {formatDate(entry.entry_date)}
+                          </span>
                           {(settings.allow_edit || settings.allow_delete) && (
-                            <div className="flex gap-1 mt-1.5 pt-1.5 border-t border-gray-50">
+                            <div className="flex items-center gap-1">
                               {settings.allow_edit && (
                                 <button
                                   onClick={() => openEditEntry(entry)}
-                                  className="flex-1 flex items-center justify-center gap-1 py-1 rounded-lg bg-gray-50 text-gray-500 text-[10px]"
+                                  className="p-1 rounded text-neutral-400 hover:text-neutral-700"
                                 >
                                   <Pencil className="w-2.5 h-2.5" />
-                                  Edit
                                 </button>
                               )}
                               {settings.allow_delete && (
                                 <button
                                   onClick={() => setShowDeleteConfirm(entry)}
-                                  className="flex-1 flex items-center justify-center gap-1 py-1 rounded-lg bg-red-50 text-red-500 text-[10px]"
+                                  className="p-1 rounded text-neutral-400 hover:text-rose-600"
                                 >
                                   <Trash2 className="w-2.5 h-2.5" />
-                                  Delete
                                 </button>
                               )}
                             </div>
                           )}
                         </div>
 
-                        {/* Connector dot */}
-                        {idx < entries.length - 1 && (
-                          <div className="flex justify-center my-0.5">
-                            <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+                        {calc.calc_type === 'quantity' ? (
+                          <p className="text-sm font-bold text-neutral-900">
+                            {formatNumber(entry.quantity)}
+                          </p>
+                        ) : (
+                          <div>
+                            <p
+                              className={`text-sm font-bold ${
+                                TRANSACTION_TYPES[entry.transaction_type]?.color || 'text-neutral-900'
+                              }`}
+                            >
+                              {formatCurrency(entry.amount)}
+                            </p>
+                            <span
+                              className={`text-[9px] font-semibold block ${
+                                TRANSACTION_TYPES[entry.transaction_type]?.color || 'text-neutral-400'
+                              }`}
+                            >
+                              {TRANSACTION_TYPES[entry.transaction_type]?.label}
+                            </span>
                           </div>
                         )}
-                      </div>
-                    ))}
-                  </div>
 
-                  {/* Add Entry Button */}
-                  <button
-                    onClick={() => {
-                      resetEntryForm()
-                      setShowAddEntry(calc)
-                    }}
-                    className={`w-full mt-2 py-2.5 rounded-xl border-2 border-dashed flex items-center justify-center gap-1.5 text-xs font-semibold transition-all active:scale-95 ${
-                      calc.calc_type === 'money'
-                        ? 'border-blue-200 text-blue-500 bg-blue-50/50'
-                        : 'border-amber-200 text-amber-600 bg-amber-50/50'
-                    }`}
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add Entry
-                  </button>
+                        {entry.description && (
+                          <p className="text-[10px] text-neutral-500 truncate pt-0.5 border-t border-neutral-100">
+                            {entry.description}
+                          </p>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             )
@@ -466,14 +582,14 @@ export default function PersonPage() {
         </div>
 
         {calculations.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-sm text-gray-400 mb-3">No calculation columns yet</p>
+          <div className="text-center py-12 bg-white rounded-2xl border border-neutral-200/70 p-6">
+            <p className="text-sm font-medium text-neutral-500 mb-3">No calculation columns yet</p>
             <button
               onClick={() => setShowAddCalc(true)}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary-600 text-white text-sm font-medium"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-neutral-900 text-white text-xs font-semibold shadow-sm"
             >
               <Plus className="w-4 h-4" />
-              Add Calculation Column
+              <span>Add First Column</span>
             </button>
           </div>
         )}
@@ -481,268 +597,299 @@ export default function PersonPage() {
 
       {/* Add Calculation Modal */}
       {showAddCalc && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center">
-          <div className="fixed inset-0 bg-black/50" onClick={() => setShowAddCalc(false)} />
-          <div className="slide-up relative bg-white rounded-t-3xl w-full max-w-lg p-6 safe-area-bottom">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-lg font-bold text-gray-900">New Calculation Column</h3>
-              <button onClick={() => setShowAddCalc(false)} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
-                <X className="w-4 h-4 text-gray-500" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Column Name</label>
-                <input
-                  type="text"
-                  value={calcName}
-                  onChange={(e) => setCalcName(e.target.value)}
-                  placeholder="e.g. Brick Production, Transport Cost"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  autoFocus
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Type</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setCalcType('quantity')}
-                    className={`p-3 rounded-xl border-2 text-center text-sm font-medium transition-all ${
-                      calcType === 'quantity'
-                        ? 'border-amber-300 bg-amber-50 text-amber-700'
-                        : 'border-gray-100 bg-white text-gray-600'
-                    }`}
-                  >
-                    <Hash className="w-5 h-5 mx-auto mb-1" />
-                    Quantity
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCalcType('money')}
-                    className={`p-3 rounded-xl border-2 text-center text-sm font-medium transition-all ${
-                      calcType === 'money'
-                        ? 'border-blue-300 bg-blue-50 text-blue-700'
-                        : 'border-gray-100 bg-white text-gray-600'
-                    }`}
-                  >
-                    <DollarSign className="w-5 h-5 mx-auto mb-1" />
-                    Money
-                  </button>
-                </div>
-              </div>
-
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-xs" onClick={() => setShowAddCalc(false)} />
+          <div className="relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 z-10 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-neutral-900">New Column</h3>
               <button
-                onClick={handleAddCalculation}
-                disabled={saving}
-                className="w-full py-3.5 rounded-xl bg-primary-600 text-white font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-transform disabled:opacity-60"
+                onClick={() => setShowAddCalc(false)}
+                className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-500"
               >
-                {saving ? 'Saving...' : 'Save Column'}
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-neutral-600 uppercase mb-1.5">
+                Column Name *
+              </label>
+              <input
+                type="text"
+                value={calcName}
+                onChange={(e) => setCalcName(e.target.value)}
+                placeholder="e.g. Brick Lifting, Money Account"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-200"
+                autoFocus
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-neutral-600 uppercase mb-1.5">
+                Column Type *
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCalcType('quantity')}
+                  className={`p-3 rounded-xl border text-center transition-all ${
+                    calcType === 'quantity'
+                      ? 'border-amber-500 bg-amber-50/70 text-amber-900 font-bold'
+                      : 'border-neutral-200 bg-white text-neutral-600'
+                  }`}
+                >
+                  <Hash className="w-4 h-4 mx-auto mb-1 text-amber-600" />
+                  <span className="text-xs">Quantity (Pcs)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCalcType('money')}
+                  className={`p-3 rounded-xl border text-center transition-all ${
+                    calcType === 'money'
+                      ? 'border-blue-500 bg-blue-50/70 text-blue-900 font-bold'
+                      : 'border-neutral-200 bg-white text-neutral-600'
+                  }`}
+                >
+                  <DollarSign className="w-4 h-4 mx-auto mb-1 text-blue-600" />
+                  <span className="text-xs">Money (₹ Cash)</span>
+                </button>
+              </div>
+            </div>
+
+            <button
+              onClick={handleAddCalculation}
+              disabled={saving || !calcName.trim()}
+              className="w-full py-3 rounded-xl bg-neutral-900 text-white font-medium text-xs shadow-sm active:scale-[0.98] transition-all disabled:opacity-50"
+            >
+              {saving ? 'Creating Column...' : 'Save Column'}
+            </button>
           </div>
         </div>
       )}
 
       {/* Add Entry Modal */}
       {showAddEntry && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center">
-          <div className="fixed inset-0 bg-black/50" onClick={() => setShowAddEntry(null)} />
-          <div className="slide-up relative bg-white rounded-t-3xl w-full max-w-lg p-6 safe-area-bottom">
-            <div className="flex items-center justify-between mb-5">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-xs" onClick={() => setShowAddEntry(null)} />
+          <div className="relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 z-10 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-bold text-gray-900">New Entry</h3>
-                <p className="text-xs text-gray-400">{showAddEntry.name}</p>
+                <h3 className="text-base font-bold text-neutral-900">Add Entry</h3>
+                <p className="text-xs text-neutral-400">{showAddEntry.name}</p>
               </div>
-              <button onClick={() => setShowAddEntry(null)} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
-                <X className="w-4 h-4 text-gray-500" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              {/* Date */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Date</label>
-                <input
-                  type="date"
-                  value={entryDate}
-                  onChange={(e) => setEntryDate(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-
-              {/* Transaction type for money */}
-              {showAddEntry.calc_type === 'money' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Transaction Type</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {Object.entries(TRANSACTION_TYPES).map(([key, val]) => (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => setEntryTxType(key)}
-                        className={`p-2.5 rounded-xl border-2 text-center text-xs font-medium transition-all ${
-                          entryTxType === key
-                            ? `${val.border} ${val.bg} ${val.color}`
-                            : 'border-gray-100 bg-white text-gray-600'
-                        }`}
-                      >
-                        {val.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Quantity or Amount */}
-              {showAddEntry.calc_type === 'quantity' ? (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Quantity</label>
-                  <input
-                    type="number"
-                    value={entryQuantity}
-                    onChange={(e) => setEntryQuantity(e.target.value)}
-                    placeholder="Enter quantity"
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    inputMode="numeric"
-                    autoFocus
-                  />
-                </div>
-              ) : (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Amount</label>
-                  <input
-                    type="number"
-                    value={entryAmount}
-                    onChange={(e) => setEntryAmount(e.target.value)}
-                    placeholder="₹ Amount"
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    inputMode="numeric"
-                    autoFocus
-                  />
-                </div>
-              )}
-
-              {/* Description */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Description (optional)</label>
-                <input
-                  type="text"
-                  value={entryDescription}
-                  onChange={(e) => setEntryDescription(e.target.value)}
-                  placeholder="Write a note"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-
               <button
-                onClick={handleAddEntry}
-                disabled={saving}
-                className="w-full py-3.5 rounded-xl bg-primary-600 text-white font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-transform disabled:opacity-60"
+                onClick={() => setShowAddEntry(null)}
+                className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-500"
               >
-                {saving ? 'Saving...' : 'Save Entry'}
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-neutral-600 uppercase mb-1">
+                Date
+              </label>
+              <input
+                type="date"
+                value={entryDate}
+                onChange={(e) => setEntryDate(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm focus:outline-none"
+              />
+            </div>
+
+            {showAddEntry.calc_type === 'money' && (
+              <div>
+                <label className="block text-xs font-semibold text-neutral-600 uppercase mb-1.5">
+                  Transaction Type
+                </label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {Object.entries(TRANSACTION_TYPES).map(([key, val]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setEntryTxType(key)}
+                      className={`p-2 rounded-lg border text-center text-[11px] font-medium transition-all ${
+                        entryTxType === key
+                          ? `${val.border} ${val.bg} ${val.color} font-bold ring-1 ring-neutral-300`
+                          : 'border-neutral-200 bg-white text-neutral-600'
+                      }`}
+                    >
+                      {val.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {showAddEntry.calc_type === 'quantity' ? (
+              <div>
+                <label className="block text-xs font-semibold text-neutral-600 uppercase mb-1">
+                  Quantity *
+                </label>
+                <input
+                  type="number"
+                  value={entryQuantity}
+                  onChange={(e) => setEntryQuantity(e.target.value)}
+                  placeholder="Enter brick count"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm focus:outline-none"
+                  inputMode="numeric"
+                  autoFocus
+                />
+              </div>
+            ) : (
+              <div>
+                <label className="block text-xs font-semibold text-neutral-600 uppercase mb-1">
+                  Amount (₹) *
+                </label>
+                <input
+                  type="number"
+                  value={entryAmount}
+                  onChange={(e) => setEntryAmount(e.target.value)}
+                  placeholder="₹ Amount"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm focus:outline-none"
+                  inputMode="numeric"
+                  autoFocus
+                />
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-semibold text-neutral-600 uppercase mb-1">
+                Note (Optional)
+              </label>
+              <input
+                type="text"
+                value={entryDescription}
+                onChange={(e) => setEntryDescription(e.target.value)}
+                placeholder="Remarks or memo"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm focus:outline-none"
+              />
+            </div>
+
+            <button
+              onClick={handleAddEntry}
+              disabled={saving}
+              className="w-full py-3 rounded-xl bg-neutral-900 text-white font-medium text-xs shadow-sm active:scale-[0.98] transition-all disabled:opacity-50"
+            >
+              {saving ? 'Saving...' : 'Save Entry'}
+            </button>
           </div>
         </div>
       )}
 
       {/* Edit Entry Modal */}
       {showEditEntry && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center">
-          <div className="fixed inset-0 bg-black/50" onClick={() => { setShowEditEntry(null); resetEntryForm() }} />
-          <div className="slide-up relative bg-white rounded-t-3xl w-full max-w-lg p-6 safe-area-bottom">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-lg font-bold text-gray-900">Edit Entry</h3>
-              <button onClick={() => { setShowEditEntry(null); resetEntryForm() }} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
-                <X className="w-4 h-4 text-gray-500" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Date</label>
-                <input
-                  type="date"
-                  value={entryDate}
-                  onChange={(e) => setEntryDate(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-
-              {/* Check calc type from the entry's calculation */}
-              {(() => {
-                const calc = calculations.find((c) => c.id === showEditEntry.calculation_id)
-                if (calc?.calc_type === 'money') {
-                  return (
-                    <>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Transaction Type</label>
-                        <div className="grid grid-cols-2 gap-2">
-                          {Object.entries(TRANSACTION_TYPES).map(([key, val]) => (
-                            <button
-                              key={key}
-                              type="button"
-                              onClick={() => setEntryTxType(key)}
-                              className={`p-2.5 rounded-xl border-2 text-center text-xs font-medium transition-all ${
-                                entryTxType === key
-                                  ? `${val.border} ${val.bg} ${val.color}`
-                                  : 'border-gray-100 bg-white text-gray-600'
-                              }`}
-                            >
-                              {val.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Amount</label>
-                        <input
-                          type="number"
-                          value={entryAmount}
-                          onChange={(e) => setEntryAmount(e.target.value)}
-                          className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                          inputMode="numeric"
-                        />
-                      </div>
-                    </>
-                  )
-                }
-                return (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Quantity</label>
-                    <input
-                      type="number"
-                      value={entryQuantity}
-                      onChange={(e) => setEntryQuantity(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      inputMode="numeric"
-                    />
-                  </div>
-                )
-              })()}
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Description</label>
-                <input
-                  type="text"
-                  value={entryDescription}
-                  onChange={(e) => setEntryDescription(e.target.value)}
-                  placeholder="Write a note"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div
+            className="fixed inset-0 bg-black/40 backdrop-blur-xs"
+            onClick={() => {
+              setShowEditEntry(null)
+              resetEntryForm()
+            }}
+          />
+          <div className="relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 z-10 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-neutral-900">Edit Entry</h3>
               <button
-                onClick={handleEditEntry}
-                disabled={saving}
-                className="w-full py-3.5 rounded-xl bg-primary-600 text-white font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-transform disabled:opacity-60"
+                onClick={() => {
+                  setShowEditEntry(null)
+                  resetEntryForm()
+                }}
+                className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-500"
               >
-                {saving ? 'Updating...' : 'Update Entry'}
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-neutral-600 uppercase mb-1">
+                Date
+              </label>
+              <input
+                type="date"
+                value={entryDate}
+                onChange={(e) => setEntryDate(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm focus:outline-none"
+              />
+            </div>
+
+            {(() => {
+              const calc = calculations.find((c) => c.id === showEditEntry.calculation_id)
+              if (calc?.calc_type === 'money') {
+                return (
+                  <>
+                    <div>
+                      <label className="block text-xs font-semibold text-neutral-600 uppercase mb-1.5">
+                        Transaction Type
+                      </label>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {Object.entries(TRANSACTION_TYPES).map(([key, val]) => (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => setEntryTxType(key)}
+                            className={`p-2 rounded-lg border text-center text-[11px] font-medium transition-all ${
+                              entryTxType === key
+                                ? `${val.border} ${val.bg} ${val.color} font-bold ring-1 ring-neutral-300`
+                                : 'border-neutral-200 bg-white text-neutral-600'
+                            }`}
+                          >
+                            {val.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-neutral-600 uppercase mb-1">
+                        Amount (₹)
+                      </label>
+                      <input
+                        type="number"
+                        value={entryAmount}
+                        onChange={(e) => setEntryAmount(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm focus:outline-none"
+                        inputMode="numeric"
+                      />
+                    </div>
+                  </>
+                )
+              }
+              return (
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-600 uppercase mb-1">
+                    Quantity
+                  </label>
+                  <input
+                    type="number"
+                    value={entryQuantity}
+                    onChange={(e) => setEntryQuantity(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm focus:outline-none"
+                    inputMode="numeric"
+                  />
+                </div>
+              )
+            })()}
+
+            <div>
+              <label className="block text-xs font-semibold text-neutral-600 uppercase mb-1">
+                Note (Optional)
+              </label>
+              <input
+                type="text"
+                value={entryDescription}
+                onChange={(e) => setEntryDescription(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm focus:outline-none"
+              />
+            </div>
+
+            <button
+              onClick={handleEditEntry}
+              disabled={saving}
+              className="w-full py-3 rounded-xl bg-neutral-900 text-white font-medium text-xs shadow-sm active:scale-[0.98] transition-all disabled:opacity-50"
+            >
+              {saving ? 'Updating...' : 'Update Entry'}
+            </button>
           </div>
         </div>
       )}

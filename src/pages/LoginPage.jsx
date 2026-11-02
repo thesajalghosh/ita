@@ -22,7 +22,7 @@ export default function LoginPage() {
     }
 
     if (!isLogin && !fullName) {
-      toast('Please enter your name', 'warning')
+      toast('Please enter your full name', 'warning')
       return
     }
 
@@ -45,87 +45,89 @@ export default function LoginPage() {
         if (error) {
           toast(error.message, 'error')
         } else {
-          toast('Account created! Please verify your email.', 'success')
+          toast('Account created! Please check your email to verify.', 'success')
           setIsLogin(true)
         }
       }
     } catch {
-      toast('Something went wrong', 'error')
+      toast('Something went wrong. Please try again.', 'error')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-800 via-primary-700 to-primary-900 flex flex-col items-center justify-center p-4">
-      {/* Decorative elements */}
-      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-10 w-32 h-32 bg-primary-400/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-20 right-10 w-48 h-48 bg-primary-300/10 rounded-full blur-3xl" />
-      </div>
-
+    <div className="min-h-screen bg-neutral-900 flex flex-col items-center justify-center p-4 relative">
       <div className="relative w-full max-w-sm">
-        {/* Logo */}
-        <div className="text-center mb-8 fade-in">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-white/10 backdrop-blur-sm border border-white/20 mb-4">
-            <Building2 className="w-10 h-10 text-white" />
+        {/* Brand header */}
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-neutral-800 border border-neutral-700/80 mb-3 shadow-md">
+            <Building2 className="w-7 h-7 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-white mb-1">Brick Kiln Hisab</h1>
-          <p className="text-primary-200 text-sm">Brick Kiln Management System</p>
+          <h1 className="text-xl font-bold text-white tracking-tight">Brick Kiln Hisab</h1>
+          <p className="text-neutral-400 text-xs mt-0.5">Management & Daily Ledger</p>
         </div>
 
-        {/* Form Card */}
-        <div className="bg-white rounded-3xl shadow-2xl p-6 fade-in">
-          <h2 className="text-xl font-bold text-gray-900 mb-1">
+        {/* Minimalist Card */}
+        <div className="bg-white rounded-3xl shadow-xl p-6 border border-neutral-100">
+          <h2 className="text-base font-bold text-neutral-900 mb-0.5">
             {isLogin ? 'Sign In' : 'Create Account'}
           </h2>
-          <p className="text-sm text-gray-500 mb-6">
-            {isLogin ? 'Sign in to view your accounts' : 'Create a new account'}
+          <p className="text-xs text-neutral-500 mb-5">
+            {isLogin ? 'Enter credentials to manage your kiln hisab' : 'Register your admin profile'}
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {!isLogin && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Full Name</label>
+                <label className="block text-xs font-semibold text-neutral-600 uppercase mb-1">
+                  Full Name *
+                </label>
                 <input
                   type="text"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Enter your full name"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                  placeholder="e.g. Sajal Ghosh"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-200"
                 />
               </div>
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
+              <label className="block text-xs font-semibold text-neutral-600 uppercase mb-1">
+                Email *
+              </label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="example@email.com"
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                placeholder="name@company.com"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-200"
                 autoComplete="email"
+                required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Password</label>
+              <label className="block text-xs font-semibold text-neutral-600 uppercase mb-1">
+                Password *
+              </label>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all pr-12"
+                  className="w-full pl-3.5 pr-10 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-200"
                   autoComplete={isLogin ? 'current-password' : 'new-password'}
+                  required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700"
                 >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
@@ -133,27 +135,27 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3.5 rounded-xl bg-primary-700 hover:bg-primary-800 text-white font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all disabled:opacity-60"
+              className="w-full py-3 rounded-xl bg-neutral-900 hover:bg-black text-white font-semibold text-xs flex items-center justify-center gap-2 active:scale-[0.98] transition-all disabled:opacity-50 shadow-sm"
             >
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Please wait...
+                  <span>Processing...</span>
                 </>
               ) : isLogin ? (
-                'Sign In'
+                'Sign In to Account'
               ) : (
-                'Create Account'
+                'Create Kiln Account'
               )}
             </button>
           </form>
 
-          <div className="mt-6 text-center">
+          <div className="mt-5 pt-4 border-t border-neutral-100 text-center">
             <button
               onClick={() => setIsLogin(!isLogin)}
-              className="text-sm text-primary-600 font-medium"
+              className="text-xs text-neutral-600 hover:text-neutral-900 font-medium"
             >
-              {isLogin ? 'Create a new account' : 'Already have an account? Sign in'}
+              {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
             </button>
           </div>
         </div>

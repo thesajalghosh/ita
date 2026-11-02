@@ -5,13 +5,31 @@ import { CATEGORIES, formatCurrency, formatDate } from '../lib/constants'
 import { getCategoryStats, getRecentEntries, getAllPersons } from '../lib/api'
 import LoadingSpinner from '../components/LoadingSpinner'
 import {
-  HardHat, Package, Flame, Truck, UserCheck, Pickaxe,
-  Settings, LogOut, Search, Plus, TrendingUp,
-  Clock, Users, ChevronRight, Building2
+  HardHat,
+  Package,
+  Flame,
+  Truck,
+  UserCheck,
+  Pickaxe,
+  Settings,
+  LogOut,
+  Search,
+  Plus,
+  TrendingUp,
+  Clock,
+  Users,
+  ChevronRight,
+  Building2,
+  UserPlus,
 } from 'lucide-react'
 
 const ICON_MAP = {
-  HardHat, Package, Flame, Truck, UserCheck, Pickaxe,
+  HardHat,
+  Package,
+  Flame,
+  Truck,
+  UserCheck,
+  Pickaxe,
 }
 
 export default function DashboardPage() {
@@ -31,7 +49,7 @@ export default function DashboardPage() {
     setLoading(true)
     const [statsRes, recentRes, personsRes] = await Promise.all([
       getCategoryStats(),
-      getRecentEntries(8),
+      getRecentEntries(6),
       getAllPersons(),
     ])
     if (statsRes.data) setStats(statsRes.data)
@@ -46,87 +64,95 @@ export default function DashboardPage() {
     }
   }
 
-  if (loading) return <LoadingSpinner message="Loading dashboard..." />
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <LoadingSpinner message="Loading accounts..." />
+      </div>
+    )
+  }
 
   const categories = Object.values(CATEGORIES)
 
   return (
-    <div className="min-h-screen bg-gray-50 safe-area-top safe-area-bottom">
-      {/* Header */}
-      <div className="bg-gradient-to-br from-primary-800 via-primary-700 to-primary-900 px-4 pt-4 pb-8 rounded-b-3xl">
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center">
-              <Building2 className="w-5 h-5 text-white" />
+    <div className="min-h-screen bg-neutral-50/70 safe-area-top safe-area-bottom pb-12">
+      {/* Minimal Top Header */}
+      <div className="bg-white/80 backdrop-blur-md border-b border-neutral-200/70 px-4 pt-3.5 pb-4 sticky top-0 z-20 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-neutral-900 text-white flex items-center justify-center shadow-xs">
+              <Building2 className="w-5 h-5 text-neutral-100" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-white">Brick Kiln Hisab</h1>
-              <p className="text-xs text-primary-200">Brick Kiln Management</p>
+              <h1 className="text-base font-semibold text-neutral-900 tracking-tight leading-tight">
+                Brick Kiln Hisab
+              </h1>
+              <p className="text-[11px] text-neutral-400">Kiln Management System</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+
+          <div className="flex items-center gap-1.5">
             <button
               onClick={() => navigate('/settings')}
-              className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center"
+              className="w-9 h-9 rounded-xl bg-neutral-100 hover:bg-neutral-200/70 active:scale-95 transition-all flex items-center justify-center text-neutral-700"
+              title="Settings"
             >
-              <Settings className="w-5 h-5 text-white" />
+              <Settings className="w-4 h-4" />
             </button>
             <button
               onClick={signOut}
-              className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center"
+              className="w-9 h-9 rounded-xl bg-neutral-100 hover:bg-neutral-200/70 active:scale-95 transition-all flex items-center justify-center text-neutral-700"
+              title="Sign Out"
             >
-              <LogOut className="w-5 h-5 text-white" />
+              <LogOut className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-2 gap-3 mb-5">
-          <div className="bg-white/15 backdrop-blur rounded-2xl p-3.5 border border-white/10">
-            <div className="flex items-center gap-2 mb-1">
-              <Users className="w-4 h-4 text-primary-200" />
-              <span className="text-xs text-primary-200">Total Persons</span>
-            </div>
-            <p className="text-2xl font-bold text-white">{totalPersons}</p>
-          </div>
-          <div className="bg-white/15 backdrop-blur rounded-2xl p-3.5 border border-white/10">
-            <div className="flex items-center gap-2 mb-1">
-              <TrendingUp className="w-4 h-4 text-primary-200" />
-              <span className="text-xs text-primary-200">Categories</span>
-            </div>
-            <p className="text-2xl font-bold text-white">{categories.length}</p>
-          </div>
-        </div>
-
-        {/* Search */}
+        {/* Minimal Search Bar */}
         <div className="relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            placeholder="Search by name..."
-            className="w-full pl-11 pr-4 py-3 rounded-2xl bg-white text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-400 shadow-lg"
+            placeholder="Search person across all categories..."
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-neutral-100/90 hover:bg-neutral-100 focus:bg-white border border-transparent focus:border-neutral-300 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-200 transition-all"
           />
         </div>
       </div>
 
-      {/* Content */}
-      <div className="px-4 -mt-2">
-        {/* Quick Add */}
-        <button
-          onClick={() => navigate('/add-person')}
-          className="w-full flex items-center justify-center gap-2 py-3.5 mb-5 rounded-2xl bg-primary-600 text-white font-semibold text-sm shadow-lg shadow-primary-200 active:scale-[0.98] transition-transform"
-        >
-          <Plus className="w-5 h-5" />
-          Add New Person
-        </button>
+      <div className="px-4 py-4 max-w-lg mx-auto space-y-5">
+        {/* Metric Cards */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-white rounded-2xl p-3.5 border border-neutral-200/70 shadow-2xs">
+            <div className="flex items-center justify-between text-neutral-500 mb-1">
+              <span className="text-[11px] font-semibold uppercase tracking-wider">Total Persons</span>
+              <Users className="w-3.5 h-3.5 text-neutral-400" />
+            </div>
+            <p className="text-2xl font-bold tracking-tight text-neutral-900">{totalPersons}</p>
+          </div>
 
-        {/* Categories */}
-        <div className="mb-6">
-          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Account Categories</h2>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="bg-white rounded-2xl p-3.5 border border-neutral-200/70 shadow-2xs">
+            <div className="flex items-center justify-between text-neutral-500 mb-1">
+              <span className="text-[11px] font-semibold uppercase tracking-wider">Categories</span>
+              <TrendingUp className="w-3.5 h-3.5 text-neutral-400" />
+            </div>
+            <p className="text-2xl font-bold tracking-tight text-neutral-900">{categories.length}</p>
+          </div>
+        </div>
+
+        {/* Categories Grid */}
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">
+              Account Categories
+            </h2>
+            <span className="text-[11px] text-neutral-400">{categories.length} sections</span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2.5">
             {categories.map((cat) => {
               const IconComponent = ICON_MAP[cat.icon] || HardHat
               const count = stats[cat.id]?.personCount || 0
@@ -134,15 +160,24 @@ export default function DashboardPage() {
                 <button
                   key={cat.id}
                   onClick={() => navigate(`/category/${cat.id}`)}
-                  className="card-hover bg-white rounded-2xl p-4 text-left border border-gray-100 shadow-sm active:scale-[0.97] transition-transform"
+                  className="bg-white rounded-2xl p-3.5 text-left border border-neutral-200/70 hover:border-neutral-300 shadow-2xs hover:shadow-xs active:scale-[0.98] transition-all group flex flex-col justify-between"
                 >
-                  <div className={`w-11 h-11 rounded-xl ${cat.color} flex items-center justify-center mb-3`}>
-                    <IconComponent className="w-5 h-5 text-white" />
+                  <div className="flex items-center justify-between mb-3">
+                    <div
+                      className={`w-9 h-9 rounded-xl ${cat.color} text-white flex items-center justify-center shadow-2xs`}
+                    >
+                      <IconComponent className="w-4 h-4" />
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-neutral-500 group-hover:translate-x-0.5 transition-all" />
                   </div>
-                  <h3 className="font-semibold text-gray-900 text-sm mb-0.5">{cat.name}</h3>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-gray-400">{count} persons</span>
-                    <ChevronRight className="w-4 h-4 text-gray-300" />
+
+                  <div>
+                    <h3 className="font-semibold text-neutral-900 text-xs truncate tracking-tight mb-0.5">
+                      {cat.name}
+                    </h3>
+                    <p className="text-[11px] text-neutral-400 font-medium">
+                      {count} {count === 1 ? 'person' : 'persons'}
+                    </p>
                   </div>
                 </button>
               )
@@ -150,33 +185,44 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Recent Activity */}
+        {/* Recent Transactions List */}
         {recentEntries.length > 0 && (
-          <div className="mb-8">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Recent Transactions</h2>
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-              {recentEntries.slice(0, 5).map((entry, idx) => (
+          <div className="space-y-2.5 pt-1">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">
+                Recent Transactions
+              </h2>
+              <span className="text-[11px] text-neutral-400 font-medium">Latest activity</span>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-neutral-200/70 shadow-2xs divide-y divide-neutral-100 overflow-hidden">
+              {recentEntries.map((entry) => (
                 <div
                   key={entry.id}
-                  className={`flex items-center justify-between px-4 py-3 ${idx !== 0 ? 'border-t border-gray-50' : ''}`}
+                  className="flex items-center justify-between px-3.5 py-3 hover:bg-neutral-50/50 transition-colors"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
-                      <Clock className="w-4 h-4 text-gray-400" />
+                    <div className="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center shrink-0 text-neutral-500">
+                      <Clock className="w-3.5 h-3.5" />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">{entry.persons?.name}</p>
-                      <p className="text-xs text-gray-400">{entry.calculations?.name} · {formatDate(entry.entry_date)}</p>
+                      <p className="text-xs font-semibold text-neutral-900 truncate">
+                        {entry.persons?.name || 'Unnamed Person'}
+                      </p>
+                      <p className="text-[10px] text-neutral-400 truncate">
+                        {entry.calculations?.name} · {formatDate(entry.entry_date)}
+                      </p>
                     </div>
                   </div>
+
                   <div className="text-right shrink-0 ml-2">
                     {entry.amount ? (
-                      <span className={`text-sm font-semibold ${Number(entry.amount) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      <span className="text-xs font-bold text-neutral-900 font-mono">
                         {formatCurrency(entry.amount)}
                       </span>
                     ) : (
-                      <span className="text-sm font-semibold text-gray-700">
-                        {Number(entry.quantity).toLocaleString('en-IN')}
+                      <span className="text-xs font-bold text-neutral-900 font-mono">
+                        {Number(entry.quantity).toLocaleString('en-IN')} pcs
                       </span>
                     )}
                   </div>

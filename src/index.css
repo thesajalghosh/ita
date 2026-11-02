@@ -142,6 +142,15 @@ input[type="number"] {
   -moz-appearance: textfield;
 }
 
+/* Hide scrollbar utility */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 /* Toast notification */
 .toast {
   animation: toastSlide 0.3s ease-out;
