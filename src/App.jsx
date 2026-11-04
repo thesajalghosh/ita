@@ -72,6 +72,14 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/category/:categoryId/person/:personId"
+        element={
+          <ProtectedRoute>
+            <PersonPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/person/:personId"
         element={
           <ProtectedRoute>

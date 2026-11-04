@@ -67,7 +67,7 @@ export default function AddPersonPage() {
         toast(`${name} added to ${currentCategory.name}`, 'success')
       }
 
-      navigate(`/person/${person.id}`, { replace: true })
+      navigate(`/category/${currentCategory.id}/person/${person.id}`, { replace: true })
     } catch (err) {
       toast('Error: ' + (err.message || 'Could not save person'), 'error')
     } finally {

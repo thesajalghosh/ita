@@ -46,7 +46,7 @@ import {
 } from 'lucide-react'
 
 export default function PersonPage() {
-  const { personId } = useParams()
+  const { categoryId, personId } = useParams()
   const navigate = useNavigate()
   const { settings } = useSettings()
 
@@ -84,6 +84,11 @@ export default function PersonPage() {
       return
     }
     setPerson(p)
+
+    // Normalize URL to /category/:categoryId/person/:personId if missing categoryId or mismatched
+    if (p.category && categoryId !== p.category) {
+      navigate(`/category/${p.category}/person/${personId}`, { replace: true })
+    }
 
     const { data: calcs } = await getCalculationsByPerson(personId)
     setCalculations(calcs || [])

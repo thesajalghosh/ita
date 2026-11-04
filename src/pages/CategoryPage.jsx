@@ -240,7 +240,7 @@ export default function CategoryPage() {
             {displayedPersons.map((person) => (
               <button
                 key={person.id}
-                onClick={() => navigate(`/person/${person.id}`)}
+                onClick={() => navigate(`/category/${categoryId}/person/${person.id}`)}
                 className="w-full bg-white rounded-xl p-3 flex items-center gap-3 border border-neutral-200/60 hover:border-neutral-300 shadow-card hover:shadow-soft text-left active:scale-[0.985] transition-all group"
               >
                 {/* Monogram */}

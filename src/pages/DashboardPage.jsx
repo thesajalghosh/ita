@@ -204,7 +204,15 @@ export default function DashboardPage() {
               {recentEntries.map((entry) => (
                 <div
                   key={entry.id}
-                  onClick={() => entry.person_id && navigate(`/person/${entry.person_id}`)}
+                  onClick={() => {
+                    if (!entry.person_id) return
+                    const cat = entry.persons?.category
+                    if (cat) {
+                      navigate(`/category/${cat}/person/${entry.person_id}`)
+                    } else {
+                      navigate(`/person/${entry.person_id}`)
+                    }
+                  }}
                   className="flex items-center justify-between px-3 py-2.5 hover:bg-neutral-50 active:bg-neutral-100 cursor-pointer transition-colors"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
