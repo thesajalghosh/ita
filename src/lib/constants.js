@@ -40,7 +40,7 @@ export const CATEGORIES = {
     colorBorder: 'border-orange-200',
     defaultCalculations: [
       { name: 'Coal Quantity', calc_type: 'quantity' },
-      { name: 'Other Materials', calc_type: 'quantity' },
+      { name: 'Mola Material', calc_type: 'quantity' },
       { name: 'Money Account', calc_type: 'money' },
     ],
   },

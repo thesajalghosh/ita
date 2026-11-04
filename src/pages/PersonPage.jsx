@@ -18,6 +18,7 @@ import {
   getPersonFinancialSummary,
   getPersonQuantitySummary,
   createCalculation,
+  updateCalculation,
   createEntry,
   updateEntry,
   softDeleteEntry,
@@ -91,6 +92,15 @@ export default function PersonPage() {
     }
 
     const { data: calcs } = await getCalculationsByPerson(personId)
+    // Auto-update legacy "Other Materials" column to "Mola Material"
+    if (calcs && calcs.length > 0) {
+      calcs.forEach((c) => {
+        if (c.name === 'Other Materials') {
+          c.name = 'Mola Material'
+          updateCalculation(c.id, { name: 'Mola Material' })
+        }
+      })
+    }
     setCalculations(calcs || [])
 
     // Load entries for each calculation
@@ -176,7 +186,7 @@ export default function PersonPage() {
         entryData.quantity = Number(entryQuantity)
       } else {
         entryData.amount = Number(entryAmount)
-        entryData.transaction_type = entryTxType
+        entryData.transaction_type = isPaidCategory ? 'i_paid_them' : entryTxType
       }
 
       const { error } = await createEntry(entryData)
@@ -210,7 +220,7 @@ export default function PersonPage() {
         updates.quantity = Number(entryQuantity)
       } else {
         updates.amount = Number(entryAmount)
-        updates.transaction_type = entryTxType
+        updates.transaction_type = isPaidCategory ? 'i_paid_them' : entryTxType
       }
 
       const { error } = await updateEntry(entry.id, updates)
@@ -241,11 +251,14 @@ export default function PersonPage() {
     }
   }
 
+  // All payment/expense categories where money is always paid by user
+  const isPaidCategory = ['labour', 'koila', 'kamin', 'sordar', 'ita_khola'].includes(person?.category)
+
   const resetEntryForm = () => {
     setEntryDate(getTodayDate())
     setEntryQuantity('')
     setEntryAmount('')
-    setEntryTxType('i_will_receive')
+    setEntryTxType(isPaidCategory ? 'i_paid_them' : 'i_will_receive')
     setEntryDescription('')
   }
 
@@ -356,63 +369,6 @@ export default function PersonPage() {
       </div>
 
       <div className="px-2 py-2.5 space-y-2">
-        {/* ─── Financial Summary ─── */}
-        {financialSummary && (
-          <div className="bg-white rounded-2xl p-3 border border-neutral-200/70 shadow-card space-y-2.5 scale-in">
-            <div className="flex items-center justify-between">
-              <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">
-                Net Balance
-              </span>
-              <div
-                className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold ${balanceStatus?.badge}`}
-              >
-                <span className={`w-1.5 h-1.5 rounded-full ${balanceStatus?.dot} animate-pulse`} />
-                <span>{balanceStatus?.label}</span>
-              </div>
-            </div>
-
-            <div className="flex items-baseline justify-between">
-              <p className={`text-xl sm:text-2xl font-extrabold tracking-tight ${balanceStatus?.color}`}>
-                {formatCurrency(Math.abs(financialSummary.net_balance))}
-              </p>
-              <span className="text-[9px] text-neutral-400 font-medium">
-                {financialSummary.net_balance > 0
-                  ? 'Receivable'
-                  : financialSummary.net_balance < 0
-                  ? 'Payable'
-                  : 'Settled'}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-4 gap-1 pt-2 border-t border-neutral-100">
-              <div className="p-1.5 rounded-lg bg-emerald-50/70 border border-emerald-100/60">
-                <span className="text-[8px] font-bold text-emerald-700 block leading-tight">Receivable</span>
-                <p className="font-extrabold text-emerald-700 text-[10px] sm:text-[11px] truncate mt-0.5">
-                  {formatCurrency(financialSummary.total_receivable)}
-                </p>
-              </div>
-              <div className="p-1.5 rounded-lg bg-blue-50/70 border border-blue-100/60">
-                <span className="text-[8px] font-bold text-blue-700 block leading-tight">Received</span>
-                <p className="font-extrabold text-blue-700 text-[10px] sm:text-[11px] truncate mt-0.5">
-                  {formatCurrency(financialSummary.total_received)}
-                </p>
-              </div>
-              <div className="p-1.5 rounded-lg bg-rose-50/70 border border-rose-100/60">
-                <span className="text-[8px] font-bold text-rose-700 block leading-tight">Payable</span>
-                <p className="font-extrabold text-rose-700 text-[10px] sm:text-[11px] truncate mt-0.5">
-                  {formatCurrency(financialSummary.total_payable)}
-                </p>
-              </div>
-              <div className="p-1.5 rounded-lg bg-amber-50/70 border border-amber-100/60">
-                <span className="text-[8px] font-bold text-amber-700 block leading-tight">Paid</span>
-                <p className="font-extrabold text-amber-700 text-[10px] sm:text-[11px] truncate mt-0.5">
-                  {formatCurrency(financialSummary.total_paid)}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* ─── Quantity Summaries ─── */}
         {Object.keys(quantitySummary).length > 0 && (
           <div className="flex gap-1 overflow-x-auto pb-0.5 scrollbar-none">
@@ -762,7 +718,7 @@ export default function PersonPage() {
               />
             </div>
 
-            {showAddEntry.calc_type === 'money' && (
+            {showAddEntry.calc_type === 'money' && !isPaidCategory && (
               <div>
                 <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1.5 tracking-wider">
                   Transaction Type
@@ -883,31 +839,33 @@ export default function PersonPage() {
               if (calc?.calc_type === 'money') {
                 return (
                   <>
-                    <div>
-                      <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1.5 tracking-wider">
-                        Transaction Type
-                      </label>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {Object.entries(TRANSACTION_TYPES).map(([key, val]) => (
-                          <button
-                            key={key}
-                            type="button"
-                            onClick={() => setEntryTxType(key)}
-                            className={`p-2 rounded-lg border text-center text-[10px] font-medium transition-all ${
-                              entryTxType === key
-                                ? `${val.border} ${val.bg} ${val.color} font-bold ring-1 ring-neutral-300`
-                                : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'
-                            }`}
-                          >
-                            {val.label}
-                          </button>
-                        ))}
+                    {!isPaidCategory && (
+                      <div>
+                        <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1.5 tracking-wider">
+                          Transaction Type
+                        </label>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {Object.entries(TRANSACTION_TYPES).map(([key, val]) => (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => setEntryTxType(key)}
+                              className={`p-2 rounded-lg border text-center text-[10px] font-medium transition-all ${
+                                entryTxType === key
+                                  ? `${val.border} ${val.bg} ${val.color} font-bold ring-1 ring-neutral-300`
+                                  : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'
+                              }`}
+                            >
+                              {val.label}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     <div>
                       <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1 tracking-wider">
-                        Amount (₹)
+                        Amount (₹) *
                       </label>
                       <input
                         type="number"
