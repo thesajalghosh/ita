@@ -26,33 +26,33 @@ export default function Toast() {
   }, [addToast])
 
   const icons = {
-    success: <CheckCircle className="w-5 h-5 text-green-500" />,
-    error: <XCircle className="w-5 h-5 text-red-500" />,
-    warning: <AlertTriangle className="w-5 h-5 text-yellow-500" />,
-    info: <Info className="w-5 h-5 text-blue-500" />,
+    success: <CheckCircle className="w-4 h-4 text-emerald-500" />,
+    error: <XCircle className="w-4 h-4 text-red-500" />,
+    warning: <AlertTriangle className="w-4 h-4 text-amber-500" />,
+    info: <Info className="w-4 h-4 text-blue-500" />,
   }
 
   const bgColors = {
-    success: 'bg-green-50 border-green-200',
-    error: 'bg-red-50 border-red-200',
-    warning: 'bg-yellow-50 border-yellow-200',
-    info: 'bg-blue-50 border-blue-200',
+    success: 'bg-white border-emerald-200/80',
+    error: 'bg-white border-red-200/80',
+    warning: 'bg-white border-amber-200/80',
+    info: 'bg-white border-blue-200/80',
   }
 
   return (
-    <div className="fixed top-4 left-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
+    <div className="fixed top-3 left-3 right-3 z-[60] flex flex-col gap-1.5 pointer-events-none">
       {toasts.map((t) => (
         <div
           key={t.id}
-          className={`toast pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl border shadow-lg ${bgColors[t.type] || bgColors.success}`}
+          className={`toast pointer-events-auto flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border shadow-lg ${bgColors[t.type] || bgColors.success}`}
         >
           {icons[t.type] || icons.success}
-          <span className="flex-1 text-sm font-medium text-gray-800">{t.message}</span>
+          <span className="flex-1 text-xs font-semibold text-neutral-800">{t.message}</span>
           <button
             onClick={() => setToasts((prev) => prev.filter((x) => x.id !== t.id))}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-neutral-400 hover:text-neutral-600 transition-colors"
           >
-            <X className="w-4 h-4" />
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
       ))}

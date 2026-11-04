@@ -6,6 +6,7 @@ import {
   formatNumber,
   formatCurrency,
   formatDate,
+  formatDateShort,
   getBalanceStatus,
   getTodayDate,
   CALC_TYPE_LABELS,
@@ -40,6 +41,8 @@ import {
   Clock,
   ArrowUpDown,
   Phone,
+  ChevronDown,
+  MoreVertical,
 } from 'lucide-react'
 
 export default function PersonPage() {
@@ -299,28 +302,28 @@ export default function PersonPage() {
   const balanceStatus = financialSummary ? getBalanceStatus(financialSummary.net_balance) : null
 
   return (
-    <div className="min-h-screen bg-neutral-50/70 safe-area-top safe-area-bottom pb-24">
-      {/* Minimalist Header */}
-      <div className="bg-white/90 backdrop-blur-md border-b border-neutral-200/70 px-4 py-3 sticky top-0 z-20">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3 min-w-0">
+    <div className="min-h-screen bg-gradient-to-b from-neutral-50 to-neutral-100/50 safe-area-top safe-area-bottom pb-20">
+      {/* ─── Sticky Header ─── */}
+      <div className="glass border-b border-neutral-200/60 px-3 py-2 sticky top-0 z-20 shadow-card">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             <button
               onClick={() => navigate(-1)}
-              className="w-9 h-9 rounded-xl bg-neutral-100 hover:bg-neutral-200/70 active:scale-95 transition-all flex items-center justify-center text-neutral-700 shrink-0"
+              className="w-8 h-8 rounded-xl bg-neutral-100 hover:bg-neutral-200/80 active:scale-95 transition-all flex items-center justify-center text-neutral-600 shrink-0"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h1 className="text-base font-semibold text-neutral-900 tracking-tight truncate">
+              <div className="flex items-center gap-1.5">
+                <h1 className="text-[13px] sm:text-sm font-bold text-neutral-900 truncate">
                   {person.name}
                 </h1>
-                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-600 border border-neutral-200/60 shrink-0">
+                <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${category?.colorLight} ${category?.colorText} border ${category?.colorBorder}`}>
                   {category?.name}
                 </span>
               </div>
               {person.phone && (
-                <p className="text-[11px] text-neutral-400 font-mono flex items-center gap-1 mt-0.5">
+                <p className="text-[9px] text-neutral-400 font-mono flex items-center gap-0.5 mt-0.5">
                   <Phone className="w-2.5 h-2.5" />
                   {person.phone}
                 </p>
@@ -328,59 +331,76 @@ export default function PersonPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1 shrink-0">
+            {person.phone && (
+              <a
+                href={`tel:${person.phone}`}
+                className="w-7 h-7 rounded-lg bg-emerald-50 hover:bg-emerald-100 active:scale-95 transition-all flex items-center justify-center text-emerald-600 border border-emerald-200/60"
+              >
+                <Phone className="w-3 h-3" />
+              </a>
+            )}
             <button
               onClick={handleExport}
-              title="Download CSV"
-              className="w-9 h-9 rounded-xl bg-neutral-100 hover:bg-neutral-200/70 active:scale-95 transition-all flex items-center justify-center text-neutral-700"
+              className="w-7 h-7 rounded-lg bg-neutral-100 hover:bg-neutral-200/80 active:scale-95 transition-all flex items-center justify-center text-neutral-600"
             >
-              <Download className="w-4 h-4" />
+              <Download className="w-3 h-3" />
             </button>
           </div>
         </div>
       </div>
 
-      <div className="px-4 py-4 max-w-lg mx-auto space-y-4">
-        {/* Financial Summary Card */}
+      <div className="px-2 py-2.5 space-y-2">
+        {/* ─── Financial Summary ─── */}
         {financialSummary && (
-          <div className="bg-white rounded-2xl p-4 border border-neutral-200/70 shadow-2xs space-y-3">
+          <div className="bg-white rounded-2xl p-3 border border-neutral-200/70 shadow-card space-y-2.5 scale-in">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">
+              <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">
                 Net Balance
               </span>
-              <span
-                className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border ${balanceStatus?.border} ${balanceStatus?.bg} ${balanceStatus?.color}`}
+              <div
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold ${balanceStatus?.badge}`}
               >
-                {balanceStatus?.label}
+                <span className={`w-1.5 h-1.5 rounded-full ${balanceStatus?.dot} animate-pulse`} />
+                <span>{balanceStatus?.label}</span>
+              </div>
+            </div>
+
+            <div className="flex items-baseline justify-between">
+              <p className={`text-xl sm:text-2xl font-extrabold tracking-tight ${balanceStatus?.color}`}>
+                {formatCurrency(Math.abs(financialSummary.net_balance))}
+              </p>
+              <span className="text-[9px] text-neutral-400 font-medium">
+                {financialSummary.net_balance > 0
+                  ? 'Receivable'
+                  : financialSummary.net_balance < 0
+                  ? 'Payable'
+                  : 'Settled'}
               </span>
             </div>
 
-            <p className={`text-2xl font-bold tracking-tight ${balanceStatus?.color}`}>
-              {formatCurrency(Math.abs(financialSummary.net_balance))}
-            </p>
-
-            <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-neutral-100">
-              <div className="p-2 rounded-xl bg-emerald-50/50 border border-emerald-100/60">
-                <span className="text-[10px] text-neutral-500 block">Receivable</span>
-                <p className="font-bold text-emerald-700 text-xs">
+            <div className="grid grid-cols-4 gap-1 pt-2 border-t border-neutral-100">
+              <div className="p-1.5 rounded-lg bg-emerald-50/70 border border-emerald-100/60">
+                <span className="text-[8px] font-bold text-emerald-700 block leading-tight">Receivable</span>
+                <p className="font-extrabold text-emerald-700 text-[10px] sm:text-[11px] truncate mt-0.5">
                   {formatCurrency(financialSummary.total_receivable)}
                 </p>
               </div>
-              <div className="p-2 rounded-xl bg-blue-50/50 border border-blue-100/60">
-                <span className="text-[10px] text-neutral-500 block">Received</span>
-                <p className="font-bold text-blue-700 text-xs">
+              <div className="p-1.5 rounded-lg bg-blue-50/70 border border-blue-100/60">
+                <span className="text-[8px] font-bold text-blue-700 block leading-tight">Received</span>
+                <p className="font-extrabold text-blue-700 text-[10px] sm:text-[11px] truncate mt-0.5">
                   {formatCurrency(financialSummary.total_received)}
                 </p>
               </div>
-              <div className="p-2 rounded-xl bg-rose-50/50 border border-rose-100/60">
-                <span className="text-[10px] text-neutral-500 block">Payable</span>
-                <p className="font-bold text-rose-700 text-xs">
+              <div className="p-1.5 rounded-lg bg-rose-50/70 border border-rose-100/60">
+                <span className="text-[8px] font-bold text-rose-700 block leading-tight">Payable</span>
+                <p className="font-extrabold text-rose-700 text-[10px] sm:text-[11px] truncate mt-0.5">
                   {formatCurrency(financialSummary.total_payable)}
                 </p>
               </div>
-              <div className="p-2 rounded-xl bg-amber-50/50 border border-amber-100/60">
-                <span className="text-[10px] text-neutral-500 block">Paid</span>
-                <p className="font-bold text-amber-700 text-xs">
+              <div className="p-1.5 rounded-lg bg-amber-50/70 border border-amber-100/60">
+                <span className="text-[8px] font-bold text-amber-700 block leading-tight">Paid</span>
+                <p className="font-extrabold text-amber-700 text-[10px] sm:text-[11px] truncate mt-0.5">
                   {formatCurrency(financialSummary.total_paid)}
                 </p>
               </div>
@@ -388,56 +408,67 @@ export default function PersonPage() {
           </div>
         )}
 
-        {/* Quantity Summaries */}
+        {/* ─── Quantity Summaries ─── */}
         {Object.keys(quantitySummary).length > 0 && (
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+          <div className="flex gap-1 overflow-x-auto pb-0.5 scrollbar-none">
             {Object.entries(quantitySummary).map(([name, total]) => (
               <div
                 key={name}
-                className="bg-white rounded-xl px-3 py-2 border border-neutral-200/70 shadow-2xs shrink-0 flex items-center gap-2"
+                className="bg-white rounded-lg px-2 py-1 border border-neutral-200/70 shadow-card shrink-0 flex items-center gap-1.5"
               >
-                <div className="w-2 h-2 rounded-full bg-amber-500" />
-                <div>
-                  <span className="text-[10px] text-neutral-400 block font-medium">{name}</span>
-                  <span className="text-xs font-bold text-neutral-900">{formatNumber(total)}</span>
+                <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                <div className="min-w-0">
+                  <span className="text-[8px] text-neutral-400 block font-medium truncate max-w-[100px] leading-tight">
+                    {name}
+                  </span>
+                  <span className="text-[11px] font-bold text-neutral-900">{formatNumber(total)}</span>
                 </div>
               </div>
             ))}
           </div>
         )}
 
-        {/* Calculations Section Header */}
-        <div className="flex items-center justify-between pt-2">
-          <div className="flex items-center gap-2">
-            <h2 className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-              Calculation Columns
+        {/* ─── Section Header ─── */}
+        <div className="flex items-center justify-between px-0.5">
+          <div className="flex items-center gap-1">
+            <h2 className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">
+              Columns
             </h2>
-            <span className="text-[11px] text-neutral-400">({calculations.length})</span>
+            <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-neutral-200/70 text-neutral-600">
+              {calculations.length}
+            </span>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            {/* Sort order toggle for timeline entries */}
+          <div className="flex items-center gap-1">
             <button
               onClick={() => setEntrySortOrder((o) => (o === 'newest' ? 'oldest' : 'newest'))}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-neutral-100 hover:bg-neutral-200/70 text-neutral-600 text-[11px] font-medium transition-colors"
-              title="Toggle entry sorting order"
+              className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-white border border-neutral-200/70 text-neutral-500 text-[9px] font-medium shadow-card"
             >
-              <ArrowUpDown className="w-3 h-3 text-neutral-500" />
-              <span>{entrySortOrder === 'newest' ? 'Newest' : 'Oldest'}</span>
+              <ArrowUpDown className="w-2.5 h-2.5" />
+              <span>{entrySortOrder === 'newest' ? 'New' : 'Old'}</span>
             </button>
 
             <button
               onClick={() => setShowAddCalc(true)}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-black text-white text-[11px] font-medium shadow-2xs active:scale-95 transition-all"
+              className="flex items-center gap-0.5 px-2 py-1 rounded-lg bg-neutral-900 text-white text-[9px] font-bold active:scale-95 transition-all"
             >
-              <Plus className="w-3 h-3" />
+              <Plus className="w-2.5 h-2.5" />
               <span>Column</span>
             </button>
           </div>
         </div>
 
-        {/* Calculation Columns - Horizontally Scrollable Cards */}
-        <div className="flex gap-3 overflow-x-auto pb-4 snap-x snap-mandatory -mx-4 px-4 scrollbar-none">
+        {/* ═══════════════════════════════════════════════════════════════
+            ★ 3 CALCULATION COLUMNS ON ONE MOBILE SCREEN ★
+            Always grid-cols-3, compact sizing, scrollable entries
+            ═══════════════════════════════════════════════════════════════ */}
+        <div
+          className={`pb-2 ${
+            calculations.length <= 3
+              ? 'grid grid-cols-3 gap-1'
+              : 'flex gap-1 overflow-x-auto snap-x snap-mandatory pb-2 scrollbar-none'
+          }`}
+        >
           {calculations.map((calc) => {
             const rawEntries = entriesMap[calc.id] || []
             const entries = [...rawEntries].sort((a, b) => {
@@ -456,124 +487,150 @@ export default function PersonPage() {
                     return s - amt
                   }, 0)
 
+            const isMoney = calc.calc_type === 'money'
+
             return (
               <div
                 key={calc.id}
-                className="min-w-[170px] w-[50vw] max-w-[210px] shrink-0 snap-start flex flex-col"
+                className={`flex flex-col ${
+                  calculations.length > 3
+                    ? 'w-[calc((100%-8px)/3)] min-w-[calc((100%-8px)/3)] shrink-0 snap-start'
+                    : 'min-w-0'
+                }`}
               >
-                {/* Column Card Header */}
+                {/* ── Column Header ── */}
                 <div
-                  className={`rounded-2xl p-3 mb-2.5 border transition-all ${
-                    calc.calc_type === 'money'
-                      ? 'bg-blue-50/70 border-blue-200/70'
-                      : 'bg-amber-50/70 border-amber-200/70'
+                  className={`rounded-xl p-1.5 mb-1 border shadow-card ${
+                    isMoney
+                      ? 'bg-gradient-to-br from-blue-50 to-indigo-50/80 border-blue-200/70'
+                      : 'bg-gradient-to-br from-amber-50 to-orange-50/80 border-amber-200/70'
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-1 mb-1">
-                    <h3 className="text-xs font-bold text-neutral-900 truncate">{calc.name}</h3>
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-neutral-400">
-                      {calc.calc_type === 'money' ? '₹' : '#'}
-                    </span>
-                  </div>
-                  <div className="flex items-baseline justify-between">
+                  <div className="flex items-center justify-between gap-0.5 mb-0.5">
+                    <h3
+                      className="text-[10px] font-bold text-neutral-800 truncate leading-tight"
+                      title={calc.name}
+                    >
+                      {calc.name}
+                    </h3>
                     <span
-                      className={`text-sm font-extrabold ${
-                        calc.calc_type === 'money' ? 'text-blue-700' : 'text-amber-800'
+                      className={`text-[7px] font-extrabold px-1 py-0.5 rounded uppercase tracking-wider shrink-0 ${
+                        isMoney
+                          ? 'bg-blue-100 text-blue-700'
+                          : 'bg-amber-100 text-amber-700'
                       }`}
                     >
-                      {calc.calc_type === 'money' ? formatCurrency(total) : formatNumber(total)}
+                      {isMoney ? '₹' : '#'}
                     </span>
-                    <span className="text-[10px] text-neutral-400">
-                      {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
+                  </div>
+                  <div className="flex items-baseline justify-between gap-0.5">
+                    <span
+                      className={`text-[11px] font-extrabold tracking-tight truncate ${
+                        isMoney ? 'text-blue-700' : 'text-amber-800'
+                      }`}
+                    >
+                      {isMoney ? formatCurrency(total) : formatNumber(total)}
+                    </span>
+                    <span className="text-[7px] text-neutral-400 font-medium shrink-0">
+                      {entries.length}
                     </span>
                   </div>
                 </div>
 
-                {/* Add Entry Quick Trigger */}
+                {/* ── Add Entry Button ── */}
                 <button
                   onClick={() => {
                     resetEntryForm()
                     setShowAddEntry(calc)
                   }}
-                  className={`w-full py-2 mb-2 rounded-xl border border-dashed flex items-center justify-center gap-1.5 text-xs font-semibold active:scale-95 transition-all ${
-                    calc.calc_type === 'money'
-                      ? 'border-blue-300 text-blue-700 bg-white hover:bg-blue-50/60'
-                      : 'border-amber-300 text-amber-700 bg-white hover:bg-amber-50/60'
+                  className={`w-full py-1 px-0.5 mb-1 rounded-lg border border-dashed flex items-center justify-center gap-0.5 text-[9px] font-semibold active:scale-95 transition-all ${
+                    isMoney
+                      ? 'border-blue-300/80 text-blue-600 bg-white hover:bg-blue-50/50'
+                      : 'border-amber-300/80 text-amber-600 bg-white hover:bg-amber-50/50'
                   }`}
                 >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Add Entry</span>
+                  <Plus className="w-2.5 h-2.5 shrink-0" />
+                  <span>Add</span>
                 </button>
 
-                {/* Entries Timeline List */}
-                <div className="space-y-1.5 flex-1 overflow-y-auto max-h-[50vh] pr-0.5">
+                {/* ── Entries List (scrollable) ── */}
+                <div className="space-y-1 flex-1 overflow-y-auto max-h-[55vh] scrollbar-none">
                   {entries.length === 0 ? (
-                    <div className="text-center py-6 px-2 bg-white rounded-xl border border-neutral-100">
-                      <p className="text-[11px] text-neutral-400">No entries yet</p>
+                    <div className="text-center py-4 px-1 bg-white/60 rounded-lg border border-dashed border-neutral-200">
+                      <p className="text-[8px] text-neutral-400 font-medium">No entries</p>
                     </div>
                   ) : (
-                    entries.map((entry) => (
-                      <div
-                        key={entry.id}
-                        className="bg-white rounded-xl p-2.5 border border-neutral-200/70 shadow-2xs space-y-1"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] text-neutral-400 font-mono flex items-center gap-1">
-                            <Calendar className="w-2.5 h-2.5" />
-                            {formatDate(entry.entry_date)}
-                          </span>
-                          {(settings.allow_edit || settings.allow_delete) && (
-                            <div className="flex items-center gap-1">
-                              {settings.allow_edit && (
-                                <button
-                                  onClick={() => openEditEntry(entry)}
-                                  className="p-1 rounded text-neutral-400 hover:text-neutral-700"
-                                >
-                                  <Pencil className="w-2.5 h-2.5" />
-                                </button>
-                              )}
-                              {settings.allow_delete && (
-                                <button
-                                  onClick={() => setShowDeleteConfirm(entry)}
-                                  className="p-1 rounded text-neutral-400 hover:text-rose-600"
-                                >
-                                  <Trash2 className="w-2.5 h-2.5" />
-                                </button>
-                              )}
+                    entries.map((entry) => {
+                      const tx = TRANSACTION_TYPES[entry.transaction_type]
+                      return (
+                        <div
+                          key={entry.id}
+                          className="bg-white rounded-lg p-1.5 border border-neutral-200/70 shadow-card space-y-0.5 transition-all hover:border-neutral-300 entry-card"
+                        >
+                          {/* Date & Actions row */}
+                          <div className="flex items-center justify-between gap-0.5">
+                            <span className="text-[8px] text-neutral-400 font-medium flex items-center gap-0.5 truncate leading-tight">
+                              <Calendar className="w-2 h-2 shrink-0 text-neutral-300" />
+                              {formatDateShort(entry.entry_date)}
+                            </span>
+                            {(settings.allow_edit || settings.allow_delete) && (
+                              <div className="flex items-center shrink-0">
+                                {settings.allow_edit && (
+                                  <button
+                                    onClick={() => openEditEntry(entry)}
+                                    className="p-0.5 rounded text-neutral-300 hover:text-blue-600 hover:bg-blue-50"
+                                  >
+                                    <Pencil className="w-2 h-2" />
+                                  </button>
+                                )}
+                                {settings.allow_delete && (
+                                  <button
+                                    onClick={() => setShowDeleteConfirm(entry)}
+                                    className="p-0.5 rounded text-neutral-300 hover:text-rose-600 hover:bg-rose-50"
+                                  >
+                                    <Trash2 className="w-2 h-2" />
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Value */}
+                          {calc.calc_type === 'quantity' ? (
+                            <p className="text-[11px] font-bold text-neutral-900 tracking-tight truncate">
+                              {formatNumber(entry.quantity)}
+                            </p>
+                          ) : (
+                            <div className="min-w-0">
+                              <p
+                                className={`text-[11px] font-bold leading-tight truncate ${
+                                  tx?.color || 'text-neutral-900'
+                                }`}
+                              >
+                                {formatCurrency(entry.amount)}
+                              </p>
+                              <span
+                                className={`text-[7px] font-bold px-0.5 py-0.5 rounded inline-block mt-0.5 truncate max-w-full ${
+                                  tx?.badge || 'bg-neutral-100 text-neutral-700'
+                                }`}
+                              >
+                                {tx?.shortLabel || 'Entry'}
+                              </span>
                             </div>
                           )}
-                        </div>
 
-                        {calc.calc_type === 'quantity' ? (
-                          <p className="text-sm font-bold text-neutral-900">
-                            {formatNumber(entry.quantity)}
-                          </p>
-                        ) : (
-                          <div>
+                          {/* Description */}
+                          {entry.description && (
                             <p
-                              className={`text-sm font-bold ${
-                                TRANSACTION_TYPES[entry.transaction_type]?.color || 'text-neutral-900'
-                              }`}
+                              className="text-[7px] text-neutral-400 truncate pt-0.5 border-t border-neutral-100 leading-tight"
+                              title={entry.description}
                             >
-                              {formatCurrency(entry.amount)}
+                              {entry.description}
                             </p>
-                            <span
-                              className={`text-[9px] font-semibold block ${
-                                TRANSACTION_TYPES[entry.transaction_type]?.color || 'text-neutral-400'
-                              }`}
-                            >
-                              {TRANSACTION_TYPES[entry.transaction_type]?.label}
-                            </span>
-                          </div>
-                        )}
-
-                        {entry.description && (
-                          <p className="text-[10px] text-neutral-500 truncate pt-0.5 border-t border-neutral-100">
-                            {entry.description}
-                          </p>
-                        )}
-                      </div>
-                    ))
+                          )}
+                        </div>
+                      )
+                    })
                   )}
                 </div>
               </div>
@@ -582,36 +639,39 @@ export default function PersonPage() {
         </div>
 
         {calculations.length === 0 && (
-          <div className="text-center py-12 bg-white rounded-2xl border border-neutral-200/70 p-6">
-            <p className="text-sm font-medium text-neutral-500 mb-3">No calculation columns yet</p>
+          <div className="text-center py-10 bg-white rounded-2xl border border-neutral-200/70 p-6 shadow-card">
+            <div className="w-12 h-12 rounded-2xl bg-neutral-100 flex items-center justify-center mx-auto mb-3">
+              <Hash className="w-6 h-6 text-neutral-400" />
+            </div>
+            <p className="text-xs font-medium text-neutral-500 mb-3">No calculation columns yet</p>
             <button
               onClick={() => setShowAddCalc(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-neutral-900 text-white text-xs font-semibold shadow-sm"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-neutral-900 text-white text-xs font-semibold shadow-sm active:scale-95 transition-all"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-3.5 h-3.5" />
               <span>Add First Column</span>
             </button>
           </div>
         )}
       </div>
 
-      {/* Add Calculation Modal */}
+      {/* ═══ Add Calculation Modal ═══ */}
       {showAddCalc && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="fixed inset-0 bg-black/40 backdrop-blur-xs" onClick={() => setShowAddCalc(false)} />
-          <div className="relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 z-10 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowAddCalc(false)} />
+          <div className="slide-up relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 z-10 space-y-4 safe-area-bottom">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-neutral-900">New Column</h3>
+              <h3 className="text-sm font-bold text-neutral-900">New Column</h3>
               <button
                 onClick={() => setShowAddCalc(false)}
-                className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-500"
+                className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-500 hover:bg-neutral-200"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-neutral-600 uppercase mb-1.5">
+              <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1.5 tracking-wider">
                 Column Name *
               </label>
               <input
@@ -619,39 +679,39 @@ export default function PersonPage() {
                 value={calcName}
                 onChange={(e) => setCalcName(e.target.value)}
                 placeholder="e.g. Brick Lifting, Money Account"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-200"
+                className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50/80 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900/10 focus:border-neutral-300 transition-all"
                 autoFocus
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-neutral-600 uppercase mb-1.5">
+              <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1.5 tracking-wider">
                 Column Type *
               </label>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => setCalcType('quantity')}
-                  className={`p-3 rounded-xl border text-center transition-all ${
+                  className={`p-3 rounded-xl border-2 text-center transition-all ${
                     calcType === 'quantity'
-                      ? 'border-amber-500 bg-amber-50/70 text-amber-900 font-bold'
-                      : 'border-neutral-200 bg-white text-neutral-600'
+                      ? 'border-amber-500 bg-amber-50 text-amber-900 shadow-sm'
+                      : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'
                   }`}
                 >
-                  <Hash className="w-4 h-4 mx-auto mb-1 text-amber-600" />
-                  <span className="text-xs">Quantity (Pcs)</span>
+                  <Hash className={`w-5 h-5 mx-auto mb-1 ${calcType === 'quantity' ? 'text-amber-600' : 'text-neutral-400'}`} />
+                  <span className="text-xs font-semibold">Quantity (Pcs)</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setCalcType('money')}
-                  className={`p-3 rounded-xl border text-center transition-all ${
+                  className={`p-3 rounded-xl border-2 text-center transition-all ${
                     calcType === 'money'
-                      ? 'border-blue-500 bg-blue-50/70 text-blue-900 font-bold'
-                      : 'border-neutral-200 bg-white text-neutral-600'
+                      ? 'border-blue-500 bg-blue-50 text-blue-900 shadow-sm'
+                      : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'
                   }`}
                 >
-                  <DollarSign className="w-4 h-4 mx-auto mb-1 text-blue-600" />
-                  <span className="text-xs">Money (₹ Cash)</span>
+                  <DollarSign className={`w-5 h-5 mx-auto mb-1 ${calcType === 'money' ? 'text-blue-600' : 'text-neutral-400'}`} />
+                  <span className="text-xs font-semibold">Money (₹)</span>
                 </button>
               </div>
             </div>
@@ -659,47 +719,47 @@ export default function PersonPage() {
             <button
               onClick={handleAddCalculation}
               disabled={saving || !calcName.trim()}
-              className="w-full py-3 rounded-xl bg-neutral-900 text-white font-medium text-xs shadow-sm active:scale-[0.98] transition-all disabled:opacity-50"
+              className="w-full py-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white font-semibold text-xs shadow-sm active:scale-[0.98] transition-all disabled:opacity-40"
             >
-              {saving ? 'Creating Column...' : 'Save Column'}
+              {saving ? 'Creating...' : 'Save Column'}
             </button>
           </div>
         </div>
       )}
 
-      {/* Add Entry Modal */}
+      {/* ═══ Add Entry Modal ═══ */}
       {showAddEntry && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="fixed inset-0 bg-black/40 backdrop-blur-xs" onClick={() => setShowAddEntry(null)} />
-          <div className="relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 z-10 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowAddEntry(null)} />
+          <div className="slide-up relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 z-10 space-y-3.5 max-h-[90vh] overflow-y-auto safe-area-bottom">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-base font-bold text-neutral-900">Add Entry</h3>
-                <p className="text-xs text-neutral-400">{showAddEntry.name}</p>
+                <h3 className="text-sm font-bold text-neutral-900">Add Entry</h3>
+                <p className="text-[10px] text-neutral-400 mt-0.5">{showAddEntry.name}</p>
               </div>
               <button
                 onClick={() => setShowAddEntry(null)}
-                className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-500"
+                className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-500 hover:bg-neutral-200"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-neutral-600 uppercase mb-1">
+              <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1 tracking-wider">
                 Date
               </label>
               <input
                 type="date"
                 value={entryDate}
                 onChange={(e) => setEntryDate(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm focus:outline-none"
+                className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50/80 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900/10"
               />
             </div>
 
             {showAddEntry.calc_type === 'money' && (
               <div>
-                <label className="block text-xs font-semibold text-neutral-600 uppercase mb-1.5">
+                <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1.5 tracking-wider">
                   Transaction Type
                 </label>
                 <div className="grid grid-cols-2 gap-1.5">
@@ -708,10 +768,10 @@ export default function PersonPage() {
                       key={key}
                       type="button"
                       onClick={() => setEntryTxType(key)}
-                      className={`p-2 rounded-lg border text-center text-[11px] font-medium transition-all ${
+                      className={`p-2 rounded-lg border text-center text-[10px] font-medium transition-all ${
                         entryTxType === key
                           ? `${val.border} ${val.bg} ${val.color} font-bold ring-1 ring-neutral-300`
-                          : 'border-neutral-200 bg-white text-neutral-600'
+                          : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'
                       }`}
                     >
                       {val.label}
@@ -723,22 +783,22 @@ export default function PersonPage() {
 
             {showAddEntry.calc_type === 'quantity' ? (
               <div>
-                <label className="block text-xs font-semibold text-neutral-600 uppercase mb-1">
+                <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1 tracking-wider">
                   Quantity *
                 </label>
                 <input
                   type="number"
                   value={entryQuantity}
                   onChange={(e) => setEntryQuantity(e.target.value)}
-                  placeholder="Enter brick count"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm focus:outline-none"
+                  placeholder="Enter count"
+                  className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50/80 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900/10"
                   inputMode="numeric"
                   autoFocus
                 />
               </div>
             ) : (
               <div>
-                <label className="block text-xs font-semibold text-neutral-600 uppercase mb-1">
+                <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1 tracking-wider">
                   Amount (₹) *
                 </label>
                 <input
@@ -746,7 +806,7 @@ export default function PersonPage() {
                   value={entryAmount}
                   onChange={(e) => setEntryAmount(e.target.value)}
                   placeholder="₹ Amount"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm focus:outline-none"
+                  className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50/80 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900/10"
                   inputMode="numeric"
                   autoFocus
                 />
@@ -754,7 +814,7 @@ export default function PersonPage() {
             )}
 
             <div>
-              <label className="block text-xs font-semibold text-neutral-600 uppercase mb-1">
+              <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1 tracking-wider">
                 Note (Optional)
               </label>
               <input
@@ -762,14 +822,14 @@ export default function PersonPage() {
                 value={entryDescription}
                 onChange={(e) => setEntryDescription(e.target.value)}
                 placeholder="Remarks or memo"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm focus:outline-none"
+                className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50/80 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900/10"
               />
             </div>
 
             <button
               onClick={handleAddEntry}
               disabled={saving}
-              className="w-full py-3 rounded-xl bg-neutral-900 text-white font-medium text-xs shadow-sm active:scale-[0.98] transition-all disabled:opacity-50"
+              className="w-full py-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white font-semibold text-xs shadow-sm active:scale-[0.98] transition-all disabled:opacity-40"
             >
               {saving ? 'Saving...' : 'Save Entry'}
             </button>
@@ -777,39 +837,39 @@ export default function PersonPage() {
         </div>
       )}
 
-      {/* Edit Entry Modal */}
+      {/* ═══ Edit Entry Modal ═══ */}
       {showEditEntry && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
           <div
-            className="fixed inset-0 bg-black/40 backdrop-blur-xs"
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm"
             onClick={() => {
               setShowEditEntry(null)
               resetEntryForm()
             }}
           />
-          <div className="relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 z-10 space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="slide-up relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 z-10 space-y-3.5 max-h-[90vh] overflow-y-auto safe-area-bottom">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-neutral-900">Edit Entry</h3>
+              <h3 className="text-sm font-bold text-neutral-900">Edit Entry</h3>
               <button
                 onClick={() => {
                   setShowEditEntry(null)
                   resetEntryForm()
                 }}
-                className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-500"
+                className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-500 hover:bg-neutral-200"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-neutral-600 uppercase mb-1">
+              <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1 tracking-wider">
                 Date
               </label>
               <input
                 type="date"
                 value={entryDate}
                 onChange={(e) => setEntryDate(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm focus:outline-none"
+                className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50/80 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900/10"
               />
             </div>
 
@@ -819,7 +879,7 @@ export default function PersonPage() {
                 return (
                   <>
                     <div>
-                      <label className="block text-xs font-semibold text-neutral-600 uppercase mb-1.5">
+                      <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1.5 tracking-wider">
                         Transaction Type
                       </label>
                       <div className="grid grid-cols-2 gap-1.5">
@@ -828,10 +888,10 @@ export default function PersonPage() {
                             key={key}
                             type="button"
                             onClick={() => setEntryTxType(key)}
-                            className={`p-2 rounded-lg border text-center text-[11px] font-medium transition-all ${
+                            className={`p-2 rounded-lg border text-center text-[10px] font-medium transition-all ${
                               entryTxType === key
                                 ? `${val.border} ${val.bg} ${val.color} font-bold ring-1 ring-neutral-300`
-                                : 'border-neutral-200 bg-white text-neutral-600'
+                                : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'
                             }`}
                           >
                             {val.label}
@@ -841,14 +901,14 @@ export default function PersonPage() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-neutral-600 uppercase mb-1">
+                      <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1 tracking-wider">
                         Amount (₹)
                       </label>
                       <input
                         type="number"
                         value={entryAmount}
                         onChange={(e) => setEntryAmount(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm focus:outline-none"
+                        className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50/80 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900/10"
                         inputMode="numeric"
                       />
                     </div>
@@ -857,14 +917,14 @@ export default function PersonPage() {
               }
               return (
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-600 uppercase mb-1">
+                  <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1 tracking-wider">
                     Quantity
                   </label>
                   <input
                     type="number"
                     value={entryQuantity}
                     onChange={(e) => setEntryQuantity(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm focus:outline-none"
+                    className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50/80 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900/10"
                     inputMode="numeric"
                   />
                 </div>
@@ -872,21 +932,21 @@ export default function PersonPage() {
             })()}
 
             <div>
-              <label className="block text-xs font-semibold text-neutral-600 uppercase mb-1">
+              <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1 tracking-wider">
                 Note (Optional)
               </label>
               <input
                 type="text"
                 value={entryDescription}
                 onChange={(e) => setEntryDescription(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm focus:outline-none"
+                className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50/80 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900/10"
               />
             </div>
 
             <button
               onClick={handleEditEntry}
               disabled={saving}
-              className="w-full py-3 rounded-xl bg-neutral-900 text-white font-medium text-xs shadow-sm active:scale-[0.98] transition-all disabled:opacity-50"
+              className="w-full py-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white font-semibold text-xs shadow-sm active:scale-[0.98] transition-all disabled:opacity-40"
             >
               {saving ? 'Updating...' : 'Update Entry'}
             </button>
