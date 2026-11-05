@@ -204,3 +204,65 @@ export const CALC_TYPE_LABELS = {
   quantity: { label: 'Quantity', labelEn: 'Quantity' },
   money: { label: 'Money', labelEn: 'Money' },
 }
+
+// Helper to get calendar week (Monday to Sunday) for any date string 'YYYY-MM-DD'
+export function getCalendarWeekRange(dateStr) {
+  if (!dateStr) return { start: '', end: '', label: '' }
+  const d = new Date(dateStr + 'T00:00:00')
+  const day = d.getDay() // 0 = Sun, 1 = Mon, ..., 6 = Sat
+  const diffToMon = day === 0 ? -6 : 1 - day
+
+  const mon = new Date(d)
+  mon.setDate(d.getDate() + diffToMon)
+
+  const sun = new Date(mon)
+  sun.setDate(mon.getDate() + 6)
+
+  const toYMD = (dt) => {
+    const y = dt.getFullYear()
+    const m = String(dt.getMonth() + 1).padStart(2, '0')
+    const dayOfMonth = String(dt.getDate()).padStart(2, '0')
+    return `${y}-${m}-${dayOfMonth}`
+  }
+
+  const start = toYMD(mon)
+  const end = toYMD(sun)
+
+  return {
+    start,
+    end,
+    label: `${formatDateShort(start)} – ${formatDateShort(end)}`,
+    fullLabel: `${formatDate(start)} – ${formatDate(end)}`,
+  }
+}
+
+// Payment status determination for ITA Sell weeks
+export function getWeeklyPaymentStatus(salesAmount, paidAmount) {
+  const remaining = Math.max(0, salesAmount - paidAmount)
+  if (remaining === 0 && salesAmount > 0) {
+    return {
+      status: 'paid',
+      label: 'Paid',
+      badge: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+      dot: 'bg-emerald-500',
+      textColor: 'text-emerald-700',
+    }
+  }
+  if (paidAmount > 0 && remaining > 0) {
+    return {
+      status: 'partial',
+      label: 'Partially Paid',
+      badge: 'bg-amber-100 text-amber-800 border-amber-200',
+      dot: 'bg-amber-500',
+      textColor: 'text-amber-700',
+    }
+  }
+  return {
+    status: 'unpaid',
+    label: 'Unpaid',
+    badge: 'bg-rose-100 text-rose-800 border-rose-200',
+    dot: 'bg-rose-500',
+    textColor: 'text-rose-700',
+  }
+}
+

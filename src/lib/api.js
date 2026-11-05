@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase'
-import { CATEGORIES } from './constants'
+import { CATEGORIES, getCalendarWeekRange } from './constants'
 
 // Storage helpers for fallback mode (when Supabase tables aren't migrated yet or offline)
 const DB_STATUS_KEY = 'ita_db_status'
@@ -966,6 +966,38 @@ export function generateCSV(entries, personName) {
   return [headers, ...rows].join('\n')
 }
 
+export function generateItaSellCSV(sales, payments, personName) {
+  const sections = []
+
+  // Sales Section
+  sections.push(`--- ITA SALES ---`)
+  sections.push('Date,Week Start,Week End,Quantity (pcs),Rate per 1000,Sales Amount,Note')
+  if (sales && sales.length > 0) {
+    sales.forEach((s) => {
+      const note = (s.note || '').replace(/,/g, ';')
+      sections.push(`${s.sale_date},${s.week_start_date},${s.week_end_date},${s.quantity},${s.rate_per_thousand},${s.sales_amount},${note}`)
+    })
+  } else {
+    sections.push('No sales recorded')
+  }
+
+  sections.push('')
+
+  // Payments Section
+  sections.push(`--- PAYMENTS RECEIVED ---`)
+  sections.push('Date,Allocated Week Start,Allocated Week End,Amount,Note')
+  if (payments && payments.length > 0) {
+    payments.forEach((p) => {
+      const note = (p.note || '').replace(/,/g, ';')
+      sections.push(`${p.payment_date},${p.week_start_date},${p.week_end_date},${p.amount},${note}`)
+    })
+  } else {
+    sections.push('No payments recorded')
+  }
+
+  return sections.join('\n')
+}
+
 // Sync local data up to Supabase once tables are ready
 export async function syncLocalDataToSupabase() {
   const { ready } = await checkDatabaseSchema()
@@ -1062,3 +1094,431 @@ export async function syncLocalDataToSupabase() {
     message: `Synced ${syncedPersons} persons, ${syncedCalcs} calculations, and ${syncedEntries} entries to Supabase!`,
   }
 }
+
+// ============================================
+// ITA SALES & PAYMENTS OPERATIONS
+// ============================================
+
+export async function getItaSalesByPerson(personId) {
+  try {
+    const { data, error } = await supabase
+      .from('ita_sales')
+      .select('*')
+      .eq('person_id', personId)
+      .eq('is_deleted', false)
+      .order('sale_date', { ascending: false })
+      .order('created_at', { ascending: false })
+
+    if (error && isTableMissingError(error)) {
+      notifyDbStatus(true)
+      const local = getLocalData('ita_sales').filter(
+        (s) => s.person_id === personId && s.is_deleted !== true
+      )
+      local.sort((a, b) => new Date(b.sale_date) - new Date(a.sale_date))
+      return { data: local, error: null }
+    }
+
+    if (data) return { data, error: null }
+
+    const local = getLocalData('ita_sales').filter(
+      (s) => s.person_id === personId && s.is_deleted !== true
+    )
+    local.sort((a, b) => new Date(b.sale_date) - new Date(a.sale_date))
+    return { data: local, error: null }
+  } catch {
+    const local = getLocalData('ita_sales').filter(
+      (s) => s.person_id === personId && s.is_deleted !== true
+    )
+    local.sort((a, b) => new Date(b.sale_date) - new Date(a.sale_date))
+    return { data: local, error: null }
+  }
+}
+
+export async function createItaSale(saleData) {
+  try {
+    const { data: authData } = await supabase.auth.getUser()
+    const userId = authData?.user?.id || getActiveUserId()
+
+    const weekRange = getCalendarWeekRange(saleData.sale_date)
+    const payload = {
+      ...saleData,
+      user_id: userId,
+      week_start_date: saleData.week_start_date || weekRange.start,
+      week_end_date: saleData.week_end_date || weekRange.end,
+    }
+
+    const { data, error } = await supabase
+      .from('ita_sales')
+      .insert(payload)
+      .select()
+      .single()
+
+    if (error && isTableMissingError(error)) {
+      notifyDbStatus(true)
+      const newSale = {
+        id: 'sale_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+        ...payload,
+        is_deleted: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+      const local = getLocalData('ita_sales')
+      local.push(newSale)
+      setLocalData('ita_sales', local)
+      return { data: newSale, error: null }
+    }
+
+    if (error) throw error
+    return { data, error: null }
+  } catch (err) {
+    if (isTableMissingError(err)) {
+      notifyDbStatus(true)
+      const userId = getActiveUserId()
+      const weekRange = getCalendarWeekRange(saleData.sale_date)
+      const newSale = {
+        id: 'sale_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+        ...saleData,
+        user_id: userId,
+        week_start_date: saleData.week_start_date || weekRange.start,
+        week_end_date: saleData.week_end_date || weekRange.end,
+        is_deleted: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+      const local = getLocalData('ita_sales')
+      local.push(newSale)
+      setLocalData('ita_sales', local)
+      return { data: newSale, error: null }
+    }
+    return { data: null, error: err }
+  }
+}
+
+export async function updateItaSale(saleId, updates) {
+  try {
+    let extra = {}
+    if (updates.sale_date) {
+      const weekRange = getCalendarWeekRange(updates.sale_date)
+      extra.week_start_date = weekRange.start
+      extra.week_end_date = weekRange.end
+    }
+
+    const { data, error } = await supabase
+      .from('ita_sales')
+      .update({ ...updates, ...extra, updated_at: new Date().toISOString() })
+      .eq('id', saleId)
+      .select()
+      .single()
+
+    if (error && isTableMissingError(error)) {
+      notifyDbStatus(true)
+      const local = getLocalData('ita_sales')
+      const idx = local.findIndex((s) => s.id === saleId)
+      if (idx !== -1) {
+        local[idx] = { ...local[idx], ...updates, ...extra, updated_at: new Date().toISOString() }
+        setLocalData('ita_sales', local)
+        return { data: local[idx], error: null }
+      }
+    }
+
+    if (data) return { data, error: null }
+
+    const local = getLocalData('ita_sales')
+    const idx = local.findIndex((s) => s.id === saleId)
+    if (idx !== -1) {
+      local[idx] = { ...local[idx], ...updates, ...extra, updated_at: new Date().toISOString() }
+      setLocalData('ita_sales', local)
+      return { data: local[idx], error: null }
+    }
+
+    return { data: null, error }
+  } catch (err) {
+    const local = getLocalData('ita_sales')
+    const idx = local.findIndex((s) => s.id === saleId)
+    if (idx !== -1) {
+      local[idx] = { ...local[idx], ...updates, updated_at: new Date().toISOString() }
+      setLocalData('ita_sales', local)
+      return { data: local[idx], error: null }
+    }
+    return { data: null, error: err }
+  }
+}
+
+export async function softDeleteItaSale(saleId) {
+  try {
+    const { data, error } = await supabase
+      .from('ita_sales')
+      .update({ is_deleted: true, updated_at: new Date().toISOString() })
+      .eq('id', saleId)
+      .select()
+      .single()
+
+    if (error && isTableMissingError(error)) {
+      notifyDbStatus(true)
+      const local = getLocalData('ita_sales')
+      const idx = local.findIndex((s) => s.id === saleId)
+      if (idx !== -1) {
+        local[idx].is_deleted = true
+        setLocalData('ita_sales', local)
+        return { data: local[idx], error: null }
+      }
+    }
+
+    if (data) return { data, error: null }
+
+    const local = getLocalData('ita_sales')
+    const idx = local.findIndex((s) => s.id === saleId)
+    if (idx !== -1) {
+      local[idx].is_deleted = true
+      setLocalData('ita_sales', local)
+      return { data: local[idx], error: null }
+    }
+
+    return { data: null, error }
+  } catch (err) {
+    const local = getLocalData('ita_sales')
+    const idx = local.findIndex((s) => s.id === saleId)
+    if (idx !== -1) {
+      local[idx].is_deleted = true
+      setLocalData('ita_sales', local)
+      return { data: local[idx], error: null }
+    }
+    return { data: null, error: err }
+  }
+}
+
+export async function getItaPaymentsByPerson(personId) {
+  try {
+    const { data, error } = await supabase
+      .from('ita_payments')
+      .select('*')
+      .eq('person_id', personId)
+      .eq('is_deleted', false)
+      .order('payment_date', { ascending: false })
+      .order('created_at', { ascending: false })
+
+    if (error && isTableMissingError(error)) {
+      notifyDbStatus(true)
+      const local = getLocalData('ita_payments').filter(
+        (p) => p.person_id === personId && p.is_deleted !== true
+      )
+      local.sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date))
+      return { data: local, error: null }
+    }
+
+    if (data) return { data, error: null }
+
+    const local = getLocalData('ita_payments').filter(
+      (p) => p.person_id === personId && p.is_deleted !== true
+    )
+    local.sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date))
+    return { data: local, error: null }
+  } catch {
+    const local = getLocalData('ita_payments').filter(
+      (p) => p.person_id === personId && p.is_deleted !== true
+    )
+    local.sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date))
+    return { data: local, error: null }
+  }
+}
+
+export async function createItaPayment(paymentData) {
+  try {
+    const { data: authData } = await supabase.auth.getUser()
+    const userId = authData?.user?.id || getActiveUserId()
+
+    const payload = {
+      ...paymentData,
+      user_id: userId,
+    }
+
+    const { data, error } = await supabase
+      .from('ita_payments')
+      .insert(payload)
+      .select()
+      .single()
+
+    if (error && isTableMissingError(error)) {
+      notifyDbStatus(true)
+      const newPayment = {
+        id: 'payment_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+        ...payload,
+        is_deleted: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+      const local = getLocalData('ita_payments')
+      local.push(newPayment)
+      setLocalData('ita_payments', local)
+      return { data: newPayment, error: null }
+    }
+
+    if (error) throw error
+    return { data, error: null }
+  } catch (err) {
+    if (isTableMissingError(err)) {
+      notifyDbStatus(true)
+      const userId = getActiveUserId()
+      const newPayment = {
+        id: 'payment_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+        ...paymentData,
+        user_id: userId,
+        is_deleted: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+      const local = getLocalData('ita_payments')
+      local.push(newPayment)
+      setLocalData('ita_payments', local)
+      return { data: newPayment, error: null }
+    }
+    return { data: null, error: err }
+  }
+}
+
+export async function updateItaPayment(paymentId, updates) {
+  try {
+    const { data, error } = await supabase
+      .from('ita_payments')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', paymentId)
+      .select()
+      .single()
+
+    if (error && isTableMissingError(error)) {
+      notifyDbStatus(true)
+      const local = getLocalData('ita_payments')
+      const idx = local.findIndex((p) => p.id === paymentId)
+      if (idx !== -1) {
+        local[idx] = { ...local[idx], ...updates, updated_at: new Date().toISOString() }
+        setLocalData('ita_payments', local)
+        return { data: local[idx], error: null }
+      }
+    }
+
+    if (data) return { data, error: null }
+
+    const local = getLocalData('ita_payments')
+    const idx = local.findIndex((p) => p.id === paymentId)
+    if (idx !== -1) {
+      local[idx] = { ...local[idx], ...updates, updated_at: new Date().toISOString() }
+      setLocalData('ita_payments', local)
+      return { data: local[idx], error: null }
+    }
+
+    return { data: null, error }
+  } catch (err) {
+    const local = getLocalData('ita_payments')
+    const idx = local.findIndex((p) => p.id === paymentId)
+    if (idx !== -1) {
+      local[idx] = { ...local[idx], ...updates, updated_at: new Date().toISOString() }
+      setLocalData('ita_payments', local)
+      return { data: local[idx], error: null }
+    }
+    return { data: null, error: err }
+  }
+}
+
+export async function softDeleteItaPayment(paymentId) {
+  try {
+    const { data, error } = await supabase
+      .from('ita_payments')
+      .update({ is_deleted: true, updated_at: new Date().toISOString() })
+      .eq('id', paymentId)
+      .select()
+      .single()
+
+    if (error && isTableMissingError(error)) {
+      notifyDbStatus(true)
+      const local = getLocalData('ita_payments')
+      const idx = local.findIndex((p) => p.id === paymentId)
+      if (idx !== -1) {
+        local[idx].is_deleted = true
+        setLocalData('ita_payments', local)
+        return { data: local[idx], error: null }
+      }
+    }
+
+    if (data) return { data, error: null }
+
+    const local = getLocalData('ita_payments')
+    const idx = local.findIndex((p) => p.id === paymentId)
+    if (idx !== -1) {
+      local[idx].is_deleted = true
+      setLocalData('ita_payments', local)
+      return { data: local[idx], error: null }
+    }
+
+    return { data: null, error }
+  } catch (err) {
+    const local = getLocalData('ita_payments')
+    const idx = local.findIndex((p) => p.id === paymentId)
+    if (idx !== -1) {
+      local[idx].is_deleted = true
+      setLocalData('ita_payments', local)
+      return { data: local[idx], error: null }
+    }
+    return { data: null, error: err }
+  }
+}
+
+// Automatically migrate legacy entries for an ita_sell person into ita_sales and ita_payments
+export async function migrateLegacyItaSellEntries(personId) {
+  try {
+    const { data: sales } = await getItaSalesByPerson(personId)
+    const { data: payments } = await getItaPaymentsByPerson(personId)
+
+    // Only migrate if no sales or payments exist yet for this person
+    if ((sales && sales.length > 0) || (payments && payments.length > 0)) {
+      return { migrated: false }
+    }
+
+    const { data: entries } = await getEntriesByPerson(personId)
+    if (!entries || entries.length === 0) {
+      return { migrated: false }
+    }
+
+    let salesAdded = 0
+    let paymentsAdded = 0
+
+    for (const e of entries) {
+      const weekRange = getCalendarWeekRange(e.entry_date)
+      // Check if it's quantity (Brick Lifting)
+      if (e.quantity && Number(e.quantity) > 0) {
+        const qty = Number(e.quantity)
+        // Check if there was amount attached or fallback default
+        const rate = e.amount ? (Number(e.amount) / (qty / 1000)) : 120
+        const salesAmt = Number(e.amount) || ((qty / 1000) * rate)
+
+        await createItaSale({
+          person_id: personId,
+          sale_date: e.entry_date,
+          quantity: qty,
+          rate_per_thousand: Math.round(rate * 100) / 100,
+          sales_amount: Math.round(salesAmt * 100) / 100,
+          note: e.description || (e.calculations?.name ? `From ${e.calculations.name}` : null),
+          week_start_date: weekRange.start,
+          week_end_date: weekRange.end,
+        })
+        salesAdded++
+      } else if (e.amount && Number(e.amount) > 0) {
+        // Payment entry
+        await createItaPayment({
+          person_id: personId,
+          payment_date: e.entry_date,
+          amount: Number(e.amount),
+          week_start_date: weekRange.start,
+          week_end_date: weekRange.end,
+          note: e.description || (e.calculations?.name ? `From ${e.calculations.name}` : null),
+        })
+        paymentsAdded++
+      }
+    }
+
+    return { migrated: true, salesAdded, paymentsAdded }
+  } catch (err) {
+    console.error('Migration error:', err)
+    return { migrated: false, error: err }
+  }
+}
+

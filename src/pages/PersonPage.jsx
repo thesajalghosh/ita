@@ -23,11 +23,15 @@ import {
   updateEntry,
   softDeleteEntry,
   generateCSV,
+  generateItaSellCSV,
+  getItaSalesByPerson,
+  getItaPaymentsByPerson,
   getEntriesByPerson,
 } from '../lib/api'
 import { useSettings } from '../contexts/SettingsContext'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ConfirmDialog from '../components/ConfirmDialog'
+import ItaSellWeeklyView from '../components/ItaSellWeeklyView'
 import { toast } from '../components/Toast'
 import {
   ArrowLeft,
@@ -277,6 +281,31 @@ export default function PersonPage() {
 
   // CSV Export
   const handleExport = async () => {
+    if (person?.category === 'ita_sell') {
+      const [salesRes, paymentsRes] = await Promise.all([
+        getItaSalesByPerson(personId),
+        getItaPaymentsByPerson(personId),
+      ])
+      const sales = salesRes.data || []
+      const payments = paymentsRes.data || []
+
+      if (sales.length === 0 && payments.length === 0) {
+        toast('No sales or payments available to export', 'warning')
+        return
+      }
+
+      const csv = generateItaSellCSV(sales, payments, person.name)
+      const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${person.name}_ita_sales_weekly.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast('ITA Sales CSV downloaded', 'success')
+      return
+    }
+
     const { data: allEntries } = await getEntriesByPerson(personId)
     if (!allEntries || allEntries.length === 0) {
       toast('No data available to export', 'warning')
@@ -369,258 +398,265 @@ export default function PersonPage() {
       </div>
 
       <div className="px-2 py-2.5 space-y-2">
-        {/* ─── Quantity Summaries ─── */}
-        {Object.keys(quantitySummary).length > 0 && (
-          <div className="flex gap-1 overflow-x-auto pb-0.5 scrollbar-none">
-            {Object.entries(quantitySummary).map(([name, total]) => (
-              <div
-                key={name}
-                className="bg-white rounded-lg px-2 py-1 border border-neutral-200/70 shadow-card shrink-0 flex items-center gap-1.5"
-              >
-                <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                <div className="min-w-0">
-                  <span className="text-[8px] text-neutral-400 block font-medium truncate max-w-[100px] leading-tight">
-                    {name}
-                  </span>
-                  <span className="text-[11px] font-bold text-neutral-900">{formatNumber(total)}</span>
-                </div>
+        {person.category === 'ita_sell' ? (
+          /* Specialized Weekly ITA Sales & Payment System for ITA Sell Person */
+          <ItaSellWeeklyView person={person} onRefreshDashboard={loadData} />
+        ) : (
+          <>
+            {/* ─── Quantity Summaries ─── */}
+            {Object.keys(quantitySummary).length > 0 && (
+              <div className="flex gap-1 overflow-x-auto pb-0.5 scrollbar-none">
+                {Object.entries(quantitySummary).map(([name, total]) => (
+                  <div
+                    key={name}
+                    className="bg-white rounded-lg px-2 py-1 border border-neutral-200/70 shadow-card shrink-0 flex items-center gap-1.5"
+                  >
+                    <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                    <div className="min-w-0">
+                      <span className="text-[8px] text-neutral-400 block font-medium truncate max-w-[100px] leading-tight">
+                        {name}
+                      </span>
+                      <span className="text-[11px] font-bold text-neutral-900">{formatNumber(total)}</span>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
+            )}
 
-        {/* ─── Section Header ─── */}
-        <div className="flex items-center justify-between px-0.5">
-          <div className="flex items-center gap-1">
-            <h2 className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">
-              Columns
-            </h2>
-            <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-neutral-200/70 text-neutral-600">
-              {calculations.length}
-            </span>
-          </div>
+            {/* ─── Section Header ─── */}
+            <div className="flex items-center justify-between px-0.5">
+              <div className="flex items-center gap-1">
+                <h2 className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">
+                  Columns
+                </h2>
+                <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-neutral-200/70 text-neutral-600">
+                  {calculations.length}
+                </span>
+              </div>
 
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setEntrySortOrder((o) => (o === 'newest' ? 'oldest' : 'newest'))}
-              className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-white border border-neutral-200/70 text-neutral-500 text-[9px] font-medium shadow-card"
-            >
-              <ArrowUpDown className="w-2.5 h-2.5" />
-              <span>{entrySortOrder === 'newest' ? 'New' : 'Old'}</span>
-            </button>
-
-            <button
-              onClick={() => setShowAddCalc(true)}
-              className="flex items-center gap-0.5 px-2 py-1 rounded-lg bg-neutral-900 text-white text-[9px] font-bold active:scale-95 transition-all"
-            >
-              <Plus className="w-2.5 h-2.5" />
-              <span>Column</span>
-            </button>
-          </div>
-        </div>
-
-        {/* ═══════════════════════════════════════════════════════════════
-            ★ 3 CALCULATION COLUMNS ON ONE MOBILE SCREEN ★
-            Always grid-cols-3, compact sizing, scrollable entries
-            ═══════════════════════════════════════════════════════════════ */}
-        <div
-          className={`pb-2 ${
-            calculations.length <= 3
-              ? 'grid grid-cols-3 gap-1'
-              : 'flex gap-1 overflow-x-auto snap-x snap-mandatory pb-2 scrollbar-none'
-          }`}
-        >
-          {calculations.map((calc) => {
-            const rawEntries = entriesMap[calc.id] || []
-            const entries = [...rawEntries].sort((a, b) => {
-              const dateA = new Date(a.entry_date).getTime()
-              const dateB = new Date(b.entry_date).getTime()
-              return entrySortOrder === 'newest' ? dateB - dateA : dateA - dateB
-            })
-
-            const total =
-              calc.calc_type === 'quantity'
-                ? entries.reduce((s, e) => s + (Number(e.quantity) || 0), 0)
-                : entries.reduce((s, e) => {
-                    const amt = Number(e.amount) || 0
-                    if (e.transaction_type === 'i_will_receive' || e.transaction_type === 'i_paid_them')
-                      return s + amt
-                    return s - amt
-                  }, 0)
-
-            const isMoney = calc.calc_type === 'money'
-
-            return (
-              <div
-                key={calc.id}
-                className={`flex flex-col ${
-                  calculations.length > 3
-                    ? 'w-[calc((100%-8px)/3)] min-w-[calc((100%-8px)/3)] shrink-0 snap-start'
-                    : 'min-w-0'
-                }`}
-              >
-                {/* ── Column Header ── */}
-                <div
-                  className={`rounded-xl p-1.5 mb-1 border shadow-card ${
-                    isMoney
-                      ? 'bg-gradient-to-br from-blue-50 to-indigo-50/80 border-blue-200/70'
-                      : 'bg-gradient-to-br from-amber-50 to-orange-50/80 border-amber-200/70'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-0.5 mb-0.5">
-                    <h3
-                      className="text-[10px] font-bold text-neutral-800 truncate leading-tight"
-                      title={calc.name}
-                    >
-                      {calc.name}
-                    </h3>
-                    <span
-                      className={`text-[7px] font-extrabold px-1 py-0.5 rounded uppercase tracking-wider shrink-0 ${
-                        isMoney
-                          ? 'bg-blue-100 text-blue-700'
-                          : 'bg-amber-100 text-amber-700'
-                      }`}
-                    >
-                      {isMoney ? '₹' : '#'}
-                    </span>
-                  </div>
-                  <div className="flex items-baseline justify-between gap-0.5">
-                    <span
-                      className={`text-[11px] font-extrabold tracking-tight truncate ${
-                        isMoney ? 'text-blue-700' : 'text-amber-800'
-                      }`}
-                    >
-                      {isMoney ? formatCurrency(total) : formatNumber(total)}
-                    </span>
-                    <span className="text-[7px] text-neutral-400 font-medium shrink-0">
-                      {entries.length}
-                    </span>
-                  </div>
-                </div>
-
-                {/* ── Add Entry Button ── */}
+              <div className="flex items-center gap-1">
                 <button
-                  onClick={() => {
-                    resetEntryForm()
-                    setShowAddEntry(calc)
-                  }}
-                  className={`w-full py-1 px-0.5 mb-1 rounded-lg border border-dashed flex items-center justify-center gap-0.5 text-[9px] font-semibold active:scale-95 transition-all ${
-                    isMoney
-                      ? 'border-blue-300/80 text-blue-600 bg-white hover:bg-blue-50/50'
-                      : 'border-amber-300/80 text-amber-600 bg-white hover:bg-amber-50/50'
-                  }`}
+                  onClick={() => setEntrySortOrder((o) => (o === 'newest' ? 'oldest' : 'newest'))}
+                  className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-white border border-neutral-200/70 text-neutral-500 text-[9px] font-medium shadow-card"
                 >
-                  <Plus className="w-2.5 h-2.5 shrink-0" />
-                  <span>Add</span>
+                  <ArrowUpDown className="w-2.5 h-2.5" />
+                  <span>{entrySortOrder === 'newest' ? 'New' : 'Old'}</span>
                 </button>
 
-                {/* ── Entries List (scrollable) ── */}
-                <div className="space-y-1 flex-1 overflow-y-auto max-h-[55vh] scrollbar-none">
-                  {entries.length === 0 ? (
-                    <div className="text-center py-4 px-1 bg-white/60 rounded-lg border border-dashed border-neutral-200">
-                      <p className="text-[8px] text-neutral-400 font-medium">No entries</p>
-                    </div>
-                  ) : (
-                    entries.map((entry) => {
-                      const tx = TRANSACTION_TYPES[entry.transaction_type]
-                      return (
-                        <div
-                          key={entry.id}
-                          className="bg-white rounded-lg p-1.5 border border-neutral-200/70 shadow-card space-y-0.5 transition-all hover:border-neutral-300 entry-card"
+                <button
+                  onClick={() => setShowAddCalc(true)}
+                  className="flex items-center gap-0.5 px-2 py-1 rounded-lg bg-neutral-900 text-white text-[9px] font-bold active:scale-95 transition-all"
+                >
+                  <Plus className="w-2.5 h-2.5" />
+                  <span>Column</span>
+                </button>
+              </div>
+            </div>
+
+            {/* ═══════════════════════════════════════════════════════════════
+                ★ 3 CALCULATION COLUMNS ON ONE MOBILE SCREEN ★
+                Always grid-cols-3, compact sizing, scrollable entries
+                ═══════════════════════════════════════════════════════════════ */}
+            <div
+              className={`pb-2 ${
+                calculations.length <= 3
+                  ? 'grid grid-cols-3 gap-1'
+                  : 'flex gap-1 overflow-x-auto snap-x snap-mandatory pb-2 scrollbar-none'
+              }`}
+            >
+              {calculations.map((calc) => {
+                const rawEntries = entriesMap[calc.id] || []
+                const entries = [...rawEntries].sort((a, b) => {
+                  const dateA = new Date(a.entry_date).getTime()
+                  const dateB = new Date(b.entry_date).getTime()
+                  return entrySortOrder === 'newest' ? dateB - dateA : dateA - dateB
+                })
+
+                const total =
+                  calc.calc_type === 'quantity'
+                    ? entries.reduce((s, e) => s + (Number(e.quantity) || 0), 0)
+                    : entries.reduce((s, e) => {
+                        const amt = Number(e.amount) || 0
+                        if (e.transaction_type === 'i_will_receive' || e.transaction_type === 'i_paid_them')
+                          return s + amt
+                        return s - amt
+                      }, 0)
+
+                const isMoney = calc.calc_type === 'money'
+
+                return (
+                  <div
+                    key={calc.id}
+                    className={`flex flex-col ${
+                      calculations.length > 3
+                        ? 'w-[calc((100%-8px)/3)] min-w-[calc((100%-8px)/3)] shrink-0 snap-start'
+                        : 'min-w-0'
+                    }`}
+                  >
+                    {/* ── Column Header ── */}
+                    <div
+                      className={`rounded-xl p-1.5 mb-1 border shadow-card ${
+                        isMoney
+                          ? 'bg-gradient-to-br from-blue-50 to-indigo-50/80 border-blue-200/70'
+                          : 'bg-gradient-to-br from-amber-50 to-orange-50/80 border-amber-200/70'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-0.5 mb-0.5">
+                        <h3
+                          className="text-[10px] font-bold text-neutral-800 truncate leading-tight"
+                          title={calc.name}
                         >
-                          {/* Date & Actions row */}
-                          <div className="flex items-center justify-between gap-0.5">
-                            <span className="text-[8px] text-neutral-400 font-medium flex items-center gap-0.5 truncate leading-tight">
-                              <Calendar className="w-2 h-2 shrink-0 text-neutral-300" />
-                              {formatDateShort(entry.entry_date)}
-                            </span>
-                            {(settings.allow_edit || settings.allow_delete) && (
-                              <div className="flex items-center shrink-0">
-                                {settings.allow_edit && (
-                                  <button
-                                    onClick={() => openEditEntry(entry)}
-                                    className="p-0.5 rounded text-neutral-300 hover:text-blue-600 hover:bg-blue-50"
-                                  >
-                                    <Pencil className="w-2 h-2" />
-                                  </button>
-                                )}
-                                {settings.allow_delete && (
-                                  <button
-                                    onClick={() => setShowDeleteConfirm(entry)}
-                                    className="p-0.5 rounded text-neutral-300 hover:text-rose-600 hover:bg-rose-50"
-                                  >
-                                    <Trash2 className="w-2 h-2" />
-                                  </button>
+                          {calc.name}
+                        </h3>
+                        <span
+                          className={`text-[7px] font-extrabold px-1 py-0.5 rounded uppercase tracking-wider shrink-0 ${
+                            isMoney
+                              ? 'bg-blue-100 text-blue-700'
+                              : 'bg-amber-100 text-amber-700'
+                          }`}
+                        >
+                          {isMoney ? '₹' : '#'}
+                        </span>
+                      </div>
+                      <div className="flex items-baseline justify-between gap-0.5">
+                        <span
+                          className={`text-[11px] font-extrabold tracking-tight truncate ${
+                            isMoney ? 'text-blue-700' : 'text-amber-800'
+                          }`}
+                        >
+                          {isMoney ? formatCurrency(total) : formatNumber(total)}
+                        </span>
+                        <span className="text-[7px] text-neutral-400 font-medium shrink-0">
+                          {entries.length}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* ── Add Entry Button ── */}
+                    <button
+                      onClick={() => {
+                        resetEntryForm()
+                        setShowAddEntry(calc)
+                      }}
+                      className={`w-full py-1 px-0.5 mb-1 rounded-lg border border-dashed flex items-center justify-center gap-0.5 text-[9px] font-semibold active:scale-95 transition-all ${
+                        isMoney
+                          ? 'border-blue-300/80 text-blue-600 bg-white hover:bg-blue-50/50'
+                          : 'border-amber-300/80 text-amber-600 bg-white hover:bg-amber-50/50'
+                      }`}
+                    >
+                      <Plus className="w-2.5 h-2.5 shrink-0" />
+                      <span>Add</span>
+                    </button>
+
+                    {/* ── Entries List (scrollable) ── */}
+                    <div className="space-y-1 flex-1 overflow-y-auto max-h-[55vh] scrollbar-none">
+                      {entries.length === 0 ? (
+                        <div className="text-center py-4 px-1 bg-white/60 rounded-lg border border-dashed border-neutral-200">
+                          <p className="text-[8px] text-neutral-400 font-medium">No entries</p>
+                        </div>
+                      ) : (
+                        entries.map((entry) => {
+                          const tx = TRANSACTION_TYPES[entry.transaction_type]
+                          return (
+                            <div
+                              key={entry.id}
+                              className="bg-white rounded-lg p-1.5 border border-neutral-200/70 shadow-card space-y-0.5 transition-all hover:border-neutral-300 entry-card"
+                            >
+                              {/* Date & Actions row */}
+                              <div className="flex items-center justify-between gap-0.5">
+                                <span className="text-[8px] text-neutral-400 font-medium flex items-center gap-0.5 truncate leading-tight">
+                                  <Calendar className="w-2 h-2 shrink-0 text-neutral-300" />
+                                  {formatDateShort(entry.entry_date)}
+                                </span>
+                                {(settings.allow_edit || settings.allow_delete) && (
+                                  <div className="flex items-center shrink-0">
+                                    {settings.allow_edit && (
+                                      <button
+                                        onClick={() => openEditEntry(entry)}
+                                        className="p-0.5 rounded text-neutral-300 hover:text-blue-600 hover:bg-blue-50"
+                                      >
+                                        <Pencil className="w-2 h-2" />
+                                      </button>
+                                    )}
+                                    {settings.allow_delete && (
+                                      <button
+                                        onClick={() => setShowDeleteConfirm(entry)}
+                                        className="p-0.5 rounded text-neutral-300 hover:text-rose-600 hover:bg-rose-50"
+                                      >
+                                        <Trash2 className="w-2 h-2" />
+                                      </button>
+                                    )}
+                                  </div>
                                 )}
                               </div>
-                            )}
-                          </div>
 
-                          {/* Value */}
-                          {calc.calc_type === 'quantity' ? (
-                            <p className="text-[11px] font-bold text-neutral-900 tracking-tight truncate">
-                              {formatNumber(entry.quantity)}
-                            </p>
-                          ) : (
-                            <div className="min-w-0">
-                              <p
-                                className={`text-[11px] font-bold leading-tight truncate ${
-                                  tx?.color || 'text-neutral-900'
-                                }`}
-                              >
-                                {formatCurrency(entry.amount)}
-                              </p>
-                              <span
-                                className={`text-[7px] font-bold px-0.5 py-0.5 rounded inline-block mt-0.5 truncate max-w-full ${
-                                  tx?.badge || 'bg-neutral-100 text-neutral-700'
-                                }`}
-                              >
-                                {tx?.shortLabel || 'Entry'}
-                              </span>
+                              {/* Value */}
+                              {calc.calc_type === 'quantity' ? (
+                                <p className="text-[11px] font-bold text-neutral-900 tracking-tight truncate">
+                                  {formatNumber(entry.quantity)}
+                                </p>
+                              ) : (
+                                <div className="min-w-0">
+                                  <p
+                                    className={`text-[11px] font-bold leading-tight truncate ${
+                                      tx?.color || 'text-neutral-900'
+                                    }`}
+                                  >
+                                    {formatCurrency(entry.amount)}
+                                  </p>
+                                  <span
+                                    className={`text-[7px] font-bold px-0.5 py-0.5 rounded inline-block mt-0.5 truncate max-w-full ${
+                                      tx?.badge || 'bg-neutral-100 text-neutral-700'
+                                    }`}
+                                  >
+                                    {tx?.shortLabel || 'Entry'}
+                                  </span>
+                                </div>
+                              )}
+
+                              {/* Description */}
+                              {entry.description && (
+                                <p
+                                  className="text-[7px] text-neutral-400 truncate pt-0.5 border-t border-neutral-100 leading-tight"
+                                  title={entry.description}
+                                >
+                                  {entry.description}
+                                </p>
+                              )}
                             </div>
-                          )}
-
-                          {/* Description */}
-                          {entry.description && (
-                            <p
-                              className="text-[7px] text-neutral-400 truncate pt-0.5 border-t border-neutral-100 leading-tight"
-                              title={entry.description}
-                            >
-                              {entry.description}
-                            </p>
-                          )}
-                        </div>
-                      )
-                    })
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-
-        {calculations.length === 0 && (
-          <div className="text-center py-10 bg-white rounded-2xl border border-neutral-200/70 p-6 shadow-card">
-            <div className="w-12 h-12 rounded-2xl bg-neutral-100 flex items-center justify-center mx-auto mb-3">
-              <Hash className="w-6 h-6 text-neutral-400" />
+                          )
+                        })
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
-            <p className="text-xs font-medium text-neutral-500 mb-3">No calculation columns yet</p>
-            <button
-              onClick={() => setShowAddCalc(true)}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-neutral-900 text-white text-xs font-semibold shadow-sm active:scale-95 transition-all"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Add First Column</span>
-            </button>
-          </div>
+
+            {calculations.length === 0 && (
+              <div className="text-center py-10 bg-white rounded-2xl border border-neutral-200/70 p-6 shadow-card">
+                <div className="w-12 h-12 rounded-2xl bg-neutral-100 flex items-center justify-center mx-auto mb-3">
+                  <Hash className="w-6 h-6 text-neutral-400" />
+                </div>
+                <p className="text-xs font-medium text-neutral-500 mb-3">No calculation columns yet</p>
+                <button
+                  onClick={() => setShowAddCalc(true)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-neutral-900 text-white text-xs font-semibold shadow-sm active:scale-95 transition-all"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add First Column</span>
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
 
       {/* ═══ Add Calculation Modal ═══ */}
       {showAddCalc && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowAddCalc(false)} />
-          <div className="slide-up relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 z-10 space-y-4 safe-area-bottom">
+          <div className="slide-up relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 pb-10 sm:pb-6 z-10 space-y-4 max-h-[85vh] overflow-y-auto safe-area-bottom shadow-2xl">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-neutral-900">New Column</h3>
               <button
@@ -677,22 +713,25 @@ export default function PersonPage() {
               </div>
             </div>
 
-            <button
-              onClick={handleAddCalculation}
-              disabled={saving || !calcName.trim()}
-              className="w-full py-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white font-semibold text-xs shadow-sm active:scale-[0.98] transition-all disabled:opacity-40"
-            >
-              {saving ? 'Creating...' : 'Save Column'}
-            </button>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={handleAddCalculation}
+                disabled={saving || !calcName.trim()}
+                className="w-full py-3.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 active:bg-black text-white font-bold text-xs shadow-md active:scale-[0.98] transition-all disabled:opacity-40"
+              >
+                {saving ? 'Creating...' : 'Save Column'}
+              </button>
+            </div>
           </div>
         </div>
       )}
 
       {/* ═══ Add Entry Modal ═══ */}
       {showAddEntry && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowAddEntry(null)} />
-          <div className="slide-up relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 z-10 space-y-3.5 max-h-[90vh] overflow-y-auto safe-area-bottom">
+          <div className="slide-up relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 pb-10 sm:pb-6 z-10 space-y-3.5 max-h-[85vh] overflow-y-auto safe-area-bottom shadow-2xl">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-bold text-neutral-900">Add Entry</h3>
@@ -787,20 +826,23 @@ export default function PersonPage() {
               />
             </div>
 
-            <button
-              onClick={handleAddEntry}
-              disabled={saving}
-              className="w-full py-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white font-semibold text-xs shadow-sm active:scale-[0.98] transition-all disabled:opacity-40"
-            >
-              {saving ? 'Saving...' : 'Save Entry'}
-            </button>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={handleAddEntry}
+                disabled={saving}
+                className="w-full py-3.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 active:bg-black text-white font-bold text-xs shadow-md active:scale-[0.98] transition-all disabled:opacity-40"
+              >
+                {saving ? 'Saving...' : 'Save Entry'}
+              </button>
+            </div>
           </div>
         </div>
       )}
 
       {/* ═══ Edit Entry Modal ═══ */}
       {showEditEntry && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div
             className="fixed inset-0 bg-black/40 backdrop-blur-sm"
             onClick={() => {
@@ -808,7 +850,7 @@ export default function PersonPage() {
               resetEntryForm()
             }}
           />
-          <div className="slide-up relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 z-10 space-y-3.5 max-h-[90vh] overflow-y-auto safe-area-bottom">
+          <div className="slide-up relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 pb-10 sm:pb-6 z-10 space-y-3.5 max-h-[85vh] overflow-y-auto safe-area-bottom shadow-2xl">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-neutral-900">Edit Entry</h3>
               <button
@@ -906,13 +948,16 @@ export default function PersonPage() {
               />
             </div>
 
-            <button
-              onClick={handleEditEntry}
-              disabled={saving}
-              className="w-full py-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white font-semibold text-xs shadow-sm active:scale-[0.98] transition-all disabled:opacity-40"
-            >
-              {saving ? 'Updating...' : 'Update Entry'}
-            </button>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={handleEditEntry}
+                disabled={saving}
+                className="w-full py-3.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 active:bg-black text-white font-bold text-xs shadow-md active:scale-[0.98] transition-all disabled:opacity-40"
+              >
+                {saving ? 'Updating...' : 'Update Entry'}
+              </button>
+            </div>
           </div>
         </div>
       )}
