@@ -112,9 +112,13 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
   }, [saleQuantity, saleRate])
 
   // Group transactions by calendar week (Monday to Sunday)
-  // Requirement 4: Latest week at top, only weeks with at least one sales transaction exist.
+  // Excess payment allocation: If any week receives payments exceeding its sales amount,
+  // the excess is automatically carried forward and added to the next remaining week(s).
   const weeklyGroups = useMemo(() => {
     const groups = {}
+
+    // Helper for precise 2-decimal calculations
+    const round2 = (num) => Math.round((Number(num) || 0) * 100) / 100
 
     // 1. Group sales by week_start_date
     sales.forEach((s) => {
@@ -130,6 +134,11 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
           payments: [],
           totalQuantity: 0,
           totalSalesAmount: 0,
+          directPaid: 0,
+          carriedIn: 0,
+          carriedOut: 0,
+          carriedInFrom: [],
+          carriedOutTo: [],
           totalPaid: 0,
           remainingAmount: 0,
           rates: new Set(),
@@ -138,33 +147,107 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
 
       groups[weekStart].sales.push(s)
       groups[weekStart].totalQuantity += Number(s.quantity) || 0
-      groups[weekStart].totalSalesAmount += Number(s.sales_amount) || 0
+      groups[weekStart].totalSalesAmount = round2(groups[weekStart].totalSalesAmount + (Number(s.sales_amount) || 0))
       if (s.rate_per_thousand !== undefined && s.rate_per_thousand !== null) {
         groups[weekStart].rates.add(Number(s.rate_per_thousand))
       }
     })
 
-    // 2. Associate payments to their weeks
-    // Payments are allocated by week_start_date
+    // 2. Associate direct payments to their weeks
     payments.forEach((p) => {
       const weekStart = p.week_start_date || getCalendarWeekRange(p.payment_date).start
       if (groups[weekStart]) {
         groups[weekStart].payments.push(p)
-        groups[weekStart].totalPaid += Number(p.amount) || 0
+        groups[weekStart].directPaid = round2(groups[weekStart].directPaid + (Number(p.amount) || 0))
       } else {
-        // If a payment was saved for an existing week, or if week not yet keyed, check if matching week exists
         const matchedWeek = Object.keys(groups).find((k) => k === weekStart)
         if (matchedWeek) {
           groups[matchedWeek].payments.push(p)
-          groups[matchedWeek].totalPaid += Number(p.amount) || 0
+          groups[matchedWeek].directPaid = round2(groups[matchedWeek].directPaid + (Number(p.amount) || 0))
         }
       }
     })
 
-    // 3. Compute remaining, status, sort transactions within each week
-    const weekList = Object.values(groups).map((w) => {
-      const remaining = Math.max(0, w.totalSalesAmount - w.totalPaid)
-      const statusInfo = getWeeklyPaymentStatus(w.totalSalesAmount, w.totalPaid)
+    // 3. Sort chronologically (oldest week to newest week) for accurate cascading
+    const chronoWeeks = Object.values(groups).sort(
+      (a, b) => new Date(a.weekStart) - new Date(b.weekStart)
+    )
+
+    // 4. Excess payment allocation pass:
+    // Any excess payment on week i flows to the next remaining week(s)
+    for (let i = 0; i < chronoWeeks.length; i++) {
+      const current = chronoWeeks[i]
+      const totalAvailable = round2(current.directPaid + current.carriedIn)
+      const salesAmt = round2(current.totalSalesAmount)
+
+      if (totalAvailable > salesAmt) {
+        let excess = round2(totalAvailable - salesAmt)
+
+        // Forward excess to subsequent weeks (i + 1, i + 2, ...) that have outstanding balance
+        for (let j = i + 1; j < chronoWeeks.length && excess > 0; j++) {
+          const nextWeek = chronoWeeks[j]
+          const nextSales = round2(nextWeek.totalSalesAmount)
+          const nextAlreadyAvailable = round2(nextWeek.directPaid + nextWeek.carriedIn)
+          const nextNeeded = round2(Math.max(0, nextSales - nextAlreadyAvailable))
+
+          if (nextNeeded > 0) {
+            const transfer = round2(Math.min(excess, nextNeeded))
+            nextWeek.carriedIn = round2(nextWeek.carriedIn + transfer)
+            current.carriedOut = round2(current.carriedOut + transfer)
+
+            current.carriedOutTo.push({
+              toWeekStart: nextWeek.weekStart,
+              toLabel: nextWeek.label,
+              amount: transfer,
+            })
+            nextWeek.carriedInFrom.push({
+              fromWeekStart: current.weekStart,
+              fromLabel: current.label,
+              amount: transfer,
+            })
+
+            excess = round2(excess - transfer)
+          }
+        }
+
+        // If there is still excess after checking all subsequent weeks,
+        // allocate to any earlier unpaid weeks (0 ... i - 1)
+        if (excess > 0) {
+          for (let k = 0; k < i && excess > 0; k++) {
+            const earlierWeek = chronoWeeks[k]
+            const earlierSales = round2(earlierWeek.totalSalesAmount)
+            const earlierAlreadyAvailable = round2(earlierWeek.directPaid + earlierWeek.carriedIn)
+            const earlierNeeded = round2(Math.max(0, earlierSales - earlierAlreadyAvailable))
+
+            if (earlierNeeded > 0) {
+              const transfer = round2(Math.min(excess, earlierNeeded))
+              earlierWeek.carriedIn = round2(earlierWeek.carriedIn + transfer)
+              current.carriedOut = round2(current.carriedOut + transfer)
+
+              current.carriedOutTo.push({
+                toWeekStart: earlierWeek.weekStart,
+                toLabel: earlierWeek.label,
+                amount: transfer,
+              })
+              earlierWeek.carriedInFrom.push({
+                fromWeekStart: current.weekStart,
+                fromLabel: current.label,
+                amount: transfer,
+              })
+
+              excess = round2(excess - transfer)
+            }
+          }
+        }
+      }
+    }
+
+    // 5. Finalize totals, remaining, status, and sorting for each week
+    const weekList = chronoWeeks.map((w) => {
+      // Effective totalPaid = directPaid + carriedIn - carriedOut
+      const totalPaid = round2(w.directPaid + w.carriedIn - w.carriedOut)
+      const remaining = round2(Math.max(0, w.totalSalesAmount - totalPaid))
+      const statusInfo = getWeeklyPaymentStatus(w.totalSalesAmount, totalPaid)
 
       // Sort sales inside week (latest first)
       w.sales.sort((a, b) => new Date(b.sale_date) - new Date(a.sale_date))
@@ -173,13 +256,14 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
 
       return {
         ...w,
+        totalPaid,
         remainingAmount: remaining,
         statusInfo,
         ratesList: Array.from(w.rates),
       }
     })
 
-    // 4. Sort weeks descending (latest week at the top)
+    // 6. Sort weeks descending (latest week at the top) for UI display
     weekList.sort((a, b) => new Date(b.weekStart) - new Date(a.weekStart))
 
     return weekList
@@ -339,26 +423,39 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
     setShowEditPayment(payment)
   }
 
-  const handlePaymentAmountChange = (val) => {
+  const handlePaymentAmountChange = (val, targetWeek = paymentTargetWeek) => {
     setPaymentAmount(val)
     const amt = Number(val)
-    if (!amt || !paymentTargetWeek) {
+    if (!amt || !targetWeek) {
       setPaymentWarning('')
       return
     }
 
-    const week = weeklyGroups.find((w) => w.weekStart === paymentTargetWeek)
+    const week = weeklyGroups.find((w) => w.weekStart === targetWeek)
     if (week) {
-      // If editing, exclude this payment's current amount from current totalPaid
-      const currentPaid = showEditPayment
-        ? week.totalPaid - (Number(showEditPayment.amount) || 0)
-        : week.totalPaid
-      const outstanding = Math.max(0, week.totalSalesAmount - currentPaid)
+      // If editing, exclude this payment's current amount from week's direct payments
+      const currentDirect = showEditPayment
+        ? Math.max(0, (week.directPaid || 0) - (Number(showEditPayment.amount) || 0))
+        : (week.directPaid || 0)
+      const availableWithoutThis = (week.carriedIn || 0) + currentDirect
+      const outstanding = Math.max(0, week.totalSalesAmount - availableWithoutThis)
 
       if (amt > outstanding) {
-        setPaymentWarning(
-          `Warning: Entered amount (${formatCurrency(amt)}) exceeds week's outstanding balance (${formatCurrency(outstanding)}).`
-        )
+        const excess = Math.round((amt - outstanding) * 100) / 100
+        // Find next chronological week with an outstanding balance
+        const chrono = [...weeklyGroups].sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart))
+        const currentIndex = chrono.findIndex((w) => w.weekStart === targetWeek)
+        const nextWeek = chrono.slice(currentIndex + 1).find((w) => w.remainingAmount > 0)
+
+        if (nextWeek) {
+          setPaymentWarning(
+            `Excess payment of ${formatCurrency(excess)} will be automatically added to the next remaining week (${nextWeek.label}).`
+          )
+        } else {
+          setPaymentWarning(
+            `Excess payment of ${formatCurrency(excess)} will be automatically added to the next remaining week or future sales.`
+          )
+        }
       } else {
         setPaymentWarning('')
       }
@@ -388,6 +485,8 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
     }
 
     setSaving(true)
+    const isExcess = amt > (selectedWeek.remainingAmount || 0)
+
     try {
       if (showEditPayment) {
         const { error } = await updateItaPayment(showEditPayment.id, {
@@ -398,7 +497,12 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
           note: paymentNote.trim() || null,
         })
         if (error) throw error
-        toast('Payment record updated', 'success')
+        toast(
+          isExcess
+            ? 'Payment updated! Excess amount automatically added to next remaining week.'
+            : 'Payment record updated',
+          'success'
+        )
         setShowEditPayment(null)
       } else {
         const { error } = await createItaPayment({
@@ -410,7 +514,12 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
           note: paymentNote.trim() || null,
         })
         if (error) throw error
-        toast('Payment saved successfully', 'success')
+        toast(
+          isExcess
+            ? 'Payment saved! Excess amount automatically added to next remaining week.'
+            : 'Payment saved successfully',
+          'success'
+        )
         setShowAddPayment(null)
         // Automatically expand the week where payment was posted
         setExpandedWeeks((prev) => ({ ...prev, [selectedWeek.weekStart]: true }))
@@ -659,6 +768,11 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
                         <span>•</span>
                         <span>
                           Paid: <strong className="text-emerald-700">{formatCurrency(week.totalPaid)}</strong>
+                          {week.carriedIn > 0 && (
+                            <span className="text-[8px] text-emerald-600 font-bold ml-1">
+                              (+{formatCurrency(week.carriedIn)})
+                            </span>
+                          )}
                         </span>
                         <span>•</span>
                         <span className={week.remainingAmount > 0 ? 'text-rose-700 font-bold' : 'text-neutral-500'}>
@@ -706,6 +820,16 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
                         <div>
                           <span className="text-neutral-400 block font-medium">Paid Amount</span>
                           <span className="font-bold text-emerald-700">{formatCurrency(week.totalPaid)}</span>
+                          {week.carriedIn > 0 && (
+                            <span className="text-[8px] text-emerald-600 font-semibold block leading-tight">
+                              (+{formatCurrency(week.carriedIn)} carried over)
+                            </span>
+                          )}
+                          {week.carriedOut > 0 && (
+                            <span className="text-[8px] text-amber-600 font-semibold block leading-tight">
+                              (-{formatCurrency(week.carriedOut)} excess to next)
+                            </span>
+                          )}
                         </div>
                         <div>
                           <span className="text-neutral-400 block font-medium">Outstanding</span>
@@ -814,12 +938,39 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
                           </button>
                         </div>
 
-                        {week.payments.length === 0 ? (
+                        {week.payments.length === 0 && week.carriedInFrom.length === 0 ? (
                           <div className="p-2 rounded-xl bg-neutral-50 border border-neutral-200/60 text-center">
                             <p className="text-[9px] text-neutral-400">No payments allocated to this week yet.</p>
                           </div>
                         ) : (
                           <div className="space-y-1">
+                            {/* Carried in from previous weeks */}
+                            {week.carriedInFrom.map((c, idx) => (
+                              <div
+                                key={'carried_in_' + idx}
+                                className="p-2 rounded-xl bg-emerald-50/70 border border-emerald-200/80 flex items-center justify-between gap-2 text-xs"
+                              >
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-[9px] font-bold text-emerald-800 bg-emerald-100/90 px-1.5 py-0.5 rounded-md flex items-center gap-1">
+                                      <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
+                                      Carried Over
+                                    </span>
+                                    <span className="text-[9.5px] font-semibold text-neutral-600">
+                                      from {c.fromLabel}
+                                    </span>
+                                  </div>
+                                  <p className="text-[8.5px] text-emerald-700 mt-0.5">
+                                    Excess payment from previous week added to this week's balance
+                                  </p>
+                                </div>
+                                <span className="font-extrabold text-emerald-700 text-xs shrink-0">
+                                  +{formatCurrency(c.amount)}
+                                </span>
+                              </div>
+                            ))}
+
+                            {/* Direct payments for this week */}
                             {week.payments.map((pmt) => (
                               <div
                                 key={pmt.id}
@@ -870,6 +1021,32 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
                                 </div>
                               </div>
                             ))}
+
+                            {/* Excess forwarded to next weeks */}
+                            {week.carriedOutTo.map((c, idx) => (
+                              <div
+                                key={'carried_out_' + idx}
+                                className="p-2 rounded-xl bg-blue-50/70 border border-blue-200/80 flex items-center justify-between gap-2 text-xs"
+                              >
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-[9px] font-bold text-blue-800 bg-blue-100/90 px-1.5 py-0.5 rounded-md flex items-center gap-1">
+                                      <ArrowRight className="w-2.5 h-2.5 text-blue-600" />
+                                      Excess Forwarded
+                                    </span>
+                                    <span className="text-[9.5px] font-semibold text-neutral-600">
+                                      to {c.toLabel}
+                                    </span>
+                                  </div>
+                                  <p className="text-[8.5px] text-blue-700 mt-0.5">
+                                    Excess payment transferred to cover next remaining week
+                                  </p>
+                                </div>
+                                <span className="font-extrabold text-blue-700 text-xs shrink-0">
+                                  -{formatCurrency(c.amount)}
+                                </span>
+                              </div>
+                            ))}
                           </div>
                         )}
                       </div>
@@ -894,7 +1071,7 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
               setShowEditSale(null)
             }}
           />
-          <div className="slide-up relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 pb-10 sm:pb-6 z-10 space-y-3.5 max-h-[85vh] overflow-y-auto safe-area-bottom shadow-2xl">
+          <div className="slide-up relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 pb-8 sm:p-6 sm:pb-6 z-10 space-y-3.5 max-h-[85vh] overflow-y-auto shadow-2xl">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-bold text-neutral-900">
@@ -992,7 +1169,7 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
             </div>
 
             {/* Save Button */}
-            <div className="pt-2">
+            <div className="pt-2 pb-2">
               <button
                 type="button"
                 onClick={handleSaveSale}
@@ -1018,7 +1195,7 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
               setShowEditPayment(null)
             }}
           />
-          <div className="slide-up relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 pb-10 sm:pb-6 z-10 space-y-3.5 max-h-[85vh] overflow-y-auto safe-area-bottom shadow-2xl">
+          <div className="slide-up relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 pb-8 sm:p-6 sm:pb-6 z-10 space-y-3.5 max-h-[85vh] overflow-y-auto shadow-2xl">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-bold text-neutral-900">
@@ -1048,7 +1225,7 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
                 value={paymentTargetWeek}
                 onChange={(e) => {
                   setPaymentTargetWeek(e.target.value)
-                  handlePaymentAmountChange(paymentAmount)
+                  handlePaymentAmountChange(paymentAmount, e.target.value)
                 }}
                 className="w-full px-3 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50/80 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-neutral-900/10"
               >
@@ -1089,11 +1266,14 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
               />
             </div>
 
-            {/* Warning if amount exceeds outstanding */}
+            {/* Notice if amount exceeds outstanding */}
             {paymentWarning && (
-              <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-1.5 text-amber-800 text-[10px] leading-tight">
-                <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-600" />
-                <span>{paymentWarning}</span>
+              <div className="p-2.5 rounded-xl bg-blue-50/90 border border-blue-200 flex items-start gap-2 text-blue-900 text-[10px] leading-tight">
+                <ArrowRight className="w-3.5 h-3.5 shrink-0 mt-0.5 text-blue-600" />
+                <div>
+                  <span className="font-bold block text-blue-950 mb-0.5">Excess Payment Allocation</span>
+                  <span>{paymentWarning}</span>
+                </div>
               </div>
             )}
 
@@ -1112,7 +1292,7 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
             </div>
 
             {/* Save Button */}
-            <div className="pt-2">
+            <div className="pt-2 pb-2">
               <button
                 type="button"
                 onClick={handleSavePayment}

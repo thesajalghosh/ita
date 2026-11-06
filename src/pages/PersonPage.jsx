@@ -458,11 +458,10 @@ export default function PersonPage() {
                 Always grid-cols-3, compact sizing, scrollable entries
                 ═══════════════════════════════════════════════════════════════ */}
             <div
-              className={`pb-2 ${
-                calculations.length <= 3
+              className={`pb-2 ${calculations.length <= 3
                   ? 'grid grid-cols-3 gap-1'
                   : 'flex gap-1 overflow-x-auto snap-x snap-mandatory pb-2 scrollbar-none'
-              }`}
+                }`}
             >
               {calculations.map((calc) => {
                 const rawEntries = entriesMap[calc.id] || []
@@ -476,30 +475,28 @@ export default function PersonPage() {
                   calc.calc_type === 'quantity'
                     ? entries.reduce((s, e) => s + (Number(e.quantity) || 0), 0)
                     : entries.reduce((s, e) => {
-                        const amt = Number(e.amount) || 0
-                        if (e.transaction_type === 'i_will_receive' || e.transaction_type === 'i_paid_them')
-                          return s + amt
-                        return s - amt
-                      }, 0)
+                      const amt = Number(e.amount) || 0
+                      if (e.transaction_type === 'i_will_receive' || e.transaction_type === 'i_paid_them')
+                        return s + amt
+                      return s - amt
+                    }, 0)
 
                 const isMoney = calc.calc_type === 'money'
 
                 return (
                   <div
                     key={calc.id}
-                    className={`flex flex-col ${
-                      calculations.length > 3
+                    className={`flex flex-col ${calculations.length > 3
                         ? 'w-[calc((100%-8px)/3)] min-w-[calc((100%-8px)/3)] shrink-0 snap-start'
                         : 'min-w-0'
-                    }`}
+                      }`}
                   >
                     {/* ── Column Header ── */}
                     <div
-                      className={`rounded-xl p-1.5 mb-1 border shadow-card ${
-                        isMoney
+                      className={`rounded-xl p-1.5 mb-1 border shadow-card ${isMoney
                           ? 'bg-gradient-to-br from-blue-50 to-indigo-50/80 border-blue-200/70'
                           : 'bg-gradient-to-br from-amber-50 to-orange-50/80 border-amber-200/70'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center justify-between gap-0.5 mb-0.5">
                         <h3
@@ -509,20 +506,18 @@ export default function PersonPage() {
                           {calc.name}
                         </h3>
                         <span
-                          className={`text-[7px] font-extrabold px-1 py-0.5 rounded uppercase tracking-wider shrink-0 ${
-                            isMoney
+                          className={`text-[7px] font-extrabold px-1 py-0.5 rounded uppercase tracking-wider shrink-0 ${isMoney
                               ? 'bg-blue-100 text-blue-700'
                               : 'bg-amber-100 text-amber-700'
-                          }`}
+                            }`}
                         >
                           {isMoney ? '₹' : '#'}
                         </span>
                       </div>
                       <div className="flex items-baseline justify-between gap-0.5">
                         <span
-                          className={`text-[11px] font-extrabold tracking-tight truncate ${
-                            isMoney ? 'text-blue-700' : 'text-amber-800'
-                          }`}
+                          className={`text-[11px] font-extrabold tracking-tight truncate ${isMoney ? 'text-blue-700' : 'text-amber-800'
+                            }`}
                         >
                           {isMoney ? formatCurrency(total) : formatNumber(total)}
                         </span>
@@ -538,11 +533,10 @@ export default function PersonPage() {
                         resetEntryForm()
                         setShowAddEntry(calc)
                       }}
-                      className={`w-full py-1 px-0.5 mb-1 rounded-lg border border-dashed flex items-center justify-center gap-0.5 text-[9px] font-semibold active:scale-95 transition-all ${
-                        isMoney
+                      className={`w-full py-1 px-0.5 mb-1 rounded-lg border border-dashed flex items-center justify-center gap-0.5 text-[9px] font-semibold active:scale-95 transition-all ${isMoney
                           ? 'border-blue-300/80 text-blue-600 bg-white hover:bg-blue-50/50'
                           : 'border-amber-300/80 text-amber-600 bg-white hover:bg-amber-50/50'
-                      }`}
+                        }`}
                     >
                       <Plus className="w-2.5 h-2.5 shrink-0" />
                       <span>Add</span>
@@ -598,16 +592,14 @@ export default function PersonPage() {
                               ) : (
                                 <div className="min-w-0">
                                   <p
-                                    className={`text-[11px] font-bold leading-tight truncate ${
-                                      tx?.color || 'text-neutral-900'
-                                    }`}
+                                    className={`text-[11px] font-bold leading-tight truncate ${tx?.color || 'text-neutral-900'
+                                      }`}
                                   >
                                     {formatCurrency(entry.amount)}
                                   </p>
                                   <span
-                                    className={`text-[7px] font-bold px-0.5 py-0.5 rounded inline-block mt-0.5 truncate max-w-full ${
-                                      tx?.badge || 'bg-neutral-100 text-neutral-700'
-                                    }`}
+                                    className={`text-[7px] font-bold px-0.5 py-0.5 rounded inline-block mt-0.5 truncate max-w-full ${tx?.badge || 'bg-neutral-100 text-neutral-700'
+                                      }`}
                                   >
                                     {tx?.shortLabel || 'Entry'}
                                   </span>
@@ -656,7 +648,7 @@ export default function PersonPage() {
       {showAddCalc && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowAddCalc(false)} />
-          <div className="slide-up relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 pb-10 sm:pb-6 z-10 space-y-4 max-h-[85vh] overflow-y-auto safe-area-bottom shadow-2xl">
+          <div className="slide-up relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 pb-8 sm:p-6 sm:pb-6 z-10 space-y-4 max-h-[85vh] overflow-y-auto shadow-2xl">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-neutral-900">New Column</h3>
               <button
@@ -689,11 +681,10 @@ export default function PersonPage() {
                 <button
                   type="button"
                   onClick={() => setCalcType('quantity')}
-                  className={`p-3 rounded-xl border-2 text-center transition-all ${
-                    calcType === 'quantity'
+                  className={`p-3 rounded-xl border-2 text-center transition-all ${calcType === 'quantity'
                       ? 'border-amber-500 bg-amber-50 text-amber-900 shadow-sm'
                       : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'
-                  }`}
+                    }`}
                 >
                   <Hash className={`w-5 h-5 mx-auto mb-1 ${calcType === 'quantity' ? 'text-amber-600' : 'text-neutral-400'}`} />
                   <span className="text-xs font-semibold">Quantity (Pcs)</span>
@@ -701,11 +692,10 @@ export default function PersonPage() {
                 <button
                   type="button"
                   onClick={() => setCalcType('money')}
-                  className={`p-3 rounded-xl border-2 text-center transition-all ${
-                    calcType === 'money'
+                  className={`p-3 rounded-xl border-2 text-center transition-all ${calcType === 'money'
                       ? 'border-blue-500 bg-blue-50 text-blue-900 shadow-sm'
                       : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'
-                  }`}
+                    }`}
                 >
                   <DollarSign className={`w-5 h-5 mx-auto mb-1 ${calcType === 'money' ? 'text-blue-600' : 'text-neutral-400'}`} />
                   <span className="text-xs font-semibold">Money (₹)</span>
@@ -713,7 +703,7 @@ export default function PersonPage() {
               </div>
             </div>
 
-            <div className="pt-2">
+            <div className="pt-2 pb-2">
               <button
                 type="button"
                 onClick={handleAddCalculation}
@@ -731,7 +721,7 @@ export default function PersonPage() {
       {showAddEntry && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowAddEntry(null)} />
-          <div className="slide-up relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 pb-10 sm:pb-6 z-10 space-y-3.5 max-h-[85vh] overflow-y-auto safe-area-bottom shadow-2xl">
+          <div className="slide-up relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 pb-8 sm:p-6 sm:pb-6 z-10 space-y-3.5 max-h-[85vh] overflow-y-auto shadow-2xl">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-bold text-neutral-900">Add Entry</h3>
@@ -768,11 +758,10 @@ export default function PersonPage() {
                       key={key}
                       type="button"
                       onClick={() => setEntryTxType(key)}
-                      className={`p-2 rounded-lg border text-center text-[10px] font-medium transition-all ${
-                        entryTxType === key
+                      className={`p-2 rounded-lg border text-center text-[10px] font-medium transition-all ${entryTxType === key
                           ? `${val.border} ${val.bg} ${val.color} font-bold ring-1 ring-neutral-300`
                           : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'
-                      }`}
+                        }`}
                     >
                       {val.label}
                     </button>
@@ -826,7 +815,7 @@ export default function PersonPage() {
               />
             </div>
 
-            <div className="pt-2">
+            <div className="pt-2 pb-2">
               <button
                 type="button"
                 onClick={handleAddEntry}
@@ -850,7 +839,7 @@ export default function PersonPage() {
               resetEntryForm()
             }}
           />
-          <div className="slide-up relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 pb-10 sm:pb-6 z-10 space-y-3.5 max-h-[85vh] overflow-y-auto safe-area-bottom shadow-2xl">
+          <div className="slide-up relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 pb-8 sm:p-6 sm:pb-6 z-10 space-y-3.5 max-h-[85vh] overflow-y-auto shadow-2xl">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-neutral-900">Edit Entry</h3>
               <button
@@ -892,11 +881,10 @@ export default function PersonPage() {
                               key={key}
                               type="button"
                               onClick={() => setEntryTxType(key)}
-                              className={`p-2 rounded-lg border text-center text-[10px] font-medium transition-all ${
-                                entryTxType === key
+                              className={`p-2 rounded-lg border text-center text-[10px] font-medium transition-all ${entryTxType === key
                                   ? `${val.border} ${val.bg} ${val.color} font-bold ring-1 ring-neutral-300`
                                   : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'
-                              }`}
+                                }`}
                             >
                               {val.label}
                             </button>
@@ -948,7 +936,7 @@ export default function PersonPage() {
               />
             </div>
 
-            <div className="pt-2">
+            <div className="pt-2 pb-2">
               <button
                 type="button"
                 onClick={handleEditEntry}
