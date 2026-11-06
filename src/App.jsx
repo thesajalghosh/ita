@@ -160,8 +160,6 @@ VITE_SUPABASE_ANON_KEY=your-anon-key-here`}
   )
 }
 
-import DatabaseNotice from './components/DatabaseNotice'
-
 export default function App() {
   if (supabaseMissing) {
     return <SetupScreen />
@@ -173,7 +171,6 @@ export default function App() {
         <SettingsProvider>
           <div className="max-w-lg mx-auto min-h-screen bg-neutral-50/70 text-neutral-900 relative shadow-sm">
             <Toast />
-            <DatabaseNotice />
             <AppRoutes />
           </div>
         </SettingsProvider>

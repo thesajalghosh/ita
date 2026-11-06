@@ -6,16 +6,46 @@ const DB_STATUS_KEY = 'ita_db_status'
 
 export function isTableMissingError(error) {
   if (!error) return false
-  const msg = error.message || ''
-  const code = error.code || ''
+  const msg = String(error.message || '').toLowerCase()
+  const code = String(error.code || '')
+  const status = Number(error.status || error.statusCode || 0)
   return (
     code === 'PGRST205' ||
     code === '42P01' ||
+    code === '57014' ||
+    status === 522 ||
+    status === 502 ||
+    status === 503 ||
+    status === 504 ||
+    status === 404 ||
+    status === 0 ||
     msg.includes('schema cache') ||
-    msg.includes('Could not find the table') ||
+    msg.includes('could not find the table') ||
     msg.includes('relation') ||
-    msg.includes('Failed to fetch')
+    msg.includes('failed to fetch') ||
+    msg.includes('network') ||
+    msg.includes('timed out') ||
+    msg.includes('timeout') ||
+    msg.includes('522') ||
+    msg.includes('502') ||
+    msg.includes('503') ||
+    msg.includes('504') ||
+    msg.includes('doctype') ||
+    msg.includes('unexpected token') ||
+    msg.includes('aborterror') ||
+    msg.includes('typeerror') ||
+    msg.includes('connection timed out')
   )
+}
+
+// Timeout helper: prevents UI from freezing for 30-60s when Supabase is in 522/paused state
+export function withTimeout(promise, ms = 2500) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Database request timed out (522/offline)')), ms)
+    ),
+  ])
 }
 
 function getActiveUserId() {
@@ -24,6 +54,11 @@ function getActiveUserId() {
     if (raw) {
       const parsed = JSON.parse(raw)
       if (parsed?.user?.id) return parsed.user.id
+    }
+    const offline = localStorage.getItem('ita_offline_user')
+    if (offline) {
+      const parsed = JSON.parse(offline)
+      if (parsed?.id) return parsed.id
     }
   } catch {
     // fallback
@@ -34,8 +69,35 @@ function getActiveUserId() {
 function getLocalData(key) {
   try {
     const uid = getActiveUserId()
-    const raw = localStorage.getItem(`${key}_${uid}`)
-    return raw ? JSON.parse(raw) : []
+    const primaryKey = `${key}_${uid}`
+    const raw = localStorage.getItem(primaryKey)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed
+    }
+
+    // Fallback: check default_user key
+    if (primaryKey !== `${key}_default_user`) {
+      const defRaw = localStorage.getItem(`${key}_default_user`)
+      if (defRaw) {
+        const parsed = JSON.parse(defRaw)
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      }
+    }
+
+    // Fallback: search all other keys starting with `${key}_`
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i)
+      if (k === key || (k && k.startsWith(`${key}_`) && k !== primaryKey)) {
+        try {
+          const fallbackData = JSON.parse(localStorage.getItem(k))
+          if (Array.isArray(fallbackData) && fallbackData.length > 0) {
+            return fallbackData
+          }
+        } catch {}
+      }
+    }
+    return []
   } catch {
     return []
   }
@@ -45,6 +107,9 @@ function setLocalData(key, data) {
   try {
     const uid = getActiveUserId()
     localStorage.setItem(`${key}_${uid}`, JSON.stringify(data))
+    if (uid !== 'default_user') {
+      localStorage.setItem(`${key}_default_user`, JSON.stringify(data))
+    }
   } catch (err) {
     console.error('Local storage write error:', err)
   }
@@ -65,10 +130,23 @@ function notifyDbStatus(isMissing) {
   listeners.forEach((fn) => fn(isMissing))
 }
 
+// Helper to query with timeout and automatic fallback when Supabase is down
+export async function safeDbQuery(queryPromise) {
+  if (_tablesMissingDetected) {
+    return { data: null, error: { message: 'Database offline', code: 'OFFLINE' } }
+  }
+  try {
+    return await withTimeout(queryPromise, 2500)
+  } catch (err) {
+    notifyDbStatus(true)
+    return { data: null, error: err }
+  }
+}
+
 // Check database connection and schema
 export async function checkDatabaseSchema() {
   try {
-    const { error } = await supabase.from('persons').select('id').limit(1)
+    const { error } = await withTimeout(supabase.from('persons').select('id').limit(1), 2500)
     if (isTableMissingError(error)) {
       notifyDbStatus(true)
       return { ready: false, error }
@@ -87,12 +165,14 @@ export async function checkDatabaseSchema() {
 
 export async function getPersonsByCategory(category) {
   try {
-    const { data, error } = await supabase
-      .from('persons')
-      .select('*')
-      .eq('category', category)
-      .eq('is_active', true)
-      .order('created_at', { ascending: false })
+    const { data, error } = await safeDbQuery(
+      supabase
+        .from('persons')
+        .select('*')
+        .eq('category', category)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+    )
 
     if (error && isTableMissingError(error)) {
       notifyDbStatus(true)
@@ -119,11 +199,13 @@ export async function getPersonsByCategory(category) {
 
 export async function getAllPersons() {
   try {
-    const { data, error } = await supabase
-      .from('persons')
-      .select('*')
-      .eq('is_active', true)
-      .order('created_at', { ascending: false })
+    const { data, error } = await safeDbQuery(
+      supabase
+        .from('persons')
+        .select('*')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+    )
 
     if (error && isTableMissingError(error)) {
       notifyDbStatus(true)
@@ -146,11 +228,13 @@ export async function getAllPersons() {
 
 export async function getPersonById(personId) {
   try {
-    const { data, error } = await supabase
-      .from('persons')
-      .select('*')
-      .eq('id', personId)
-      .single()
+    const { data, error } = await safeDbQuery(
+      supabase
+        .from('persons')
+        .select('*')
+        .eq('id', personId)
+        .single()
+    )
 
     if (error && isTableMissingError(error)) {
       notifyDbStatus(true)
@@ -288,7 +372,7 @@ export async function searchPersons(query, category = null) {
     if (category) {
       q = q.eq('category', category)
     }
-    const { data, error } = await q.order('name')
+    const { data, error } = await safeDbQuery(q.order('name'))
 
     if (error && isTableMissingError(error)) {
       notifyDbStatus(true)
@@ -327,13 +411,15 @@ export async function searchPersons(query, category = null) {
 
 export async function getCalculationsByPerson(personId) {
   try {
-    const { data, error } = await supabase
-      .from('calculations')
-      .select('*')
-      .eq('person_id', personId)
-      .eq('is_active', true)
-      .order('sort_order', { ascending: true })
-      .order('created_at', { ascending: true })
+    const { data, error } = await safeDbQuery(
+      supabase
+        .from('calculations')
+        .select('*')
+        .eq('person_id', personId)
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: true })
+    )
 
     if (error && isTableMissingError(error)) {
       notifyDbStatus(true)
@@ -544,13 +630,15 @@ export async function createDefaultCalculations(personId, category) {
 
 export async function getEntriesByCalculation(calculationId) {
   try {
-    const { data, error } = await supabase
-      .from('entries')
-      .select('*')
-      .eq('calculation_id', calculationId)
-      .eq('is_deleted', false)
-      .order('entry_date', { ascending: true })
-      .order('created_at', { ascending: true })
+    const { data, error } = await safeDbQuery(
+      supabase
+        .from('entries')
+        .select('*')
+        .eq('calculation_id', calculationId)
+        .eq('is_deleted', false)
+        .order('entry_date', { ascending: true })
+        .order('created_at', { ascending: true })
+    )
 
     if (error && isTableMissingError(error)) {
       notifyDbStatus(true)
@@ -579,13 +667,15 @@ export async function getEntriesByCalculation(calculationId) {
 
 export async function getEntriesByPerson(personId) {
   try {
-    const { data, error } = await supabase
-      .from('entries')
-      .select('*, calculations(name, calc_type)')
-      .eq('person_id', personId)
-      .eq('is_deleted', false)
-      .order('entry_date', { ascending: false })
-      .order('created_at', { ascending: false })
+    const { data, error } = await safeDbQuery(
+      supabase
+        .from('entries')
+        .select('*, calculations(name, calc_type)')
+        .eq('person_id', personId)
+        .eq('is_deleted', false)
+        .order('entry_date', { ascending: false })
+        .order('created_at', { ascending: false })
+    )
 
     if (error && isTableMissingError(error)) {
       notifyDbStatus(true)
@@ -1101,13 +1191,15 @@ export async function syncLocalDataToSupabase() {
 
 export async function getItaSalesByPerson(personId) {
   try {
-    const { data, error } = await supabase
-      .from('ita_sales')
-      .select('*')
-      .eq('person_id', personId)
-      .eq('is_deleted', false)
-      .order('sale_date', { ascending: false })
-      .order('created_at', { ascending: false })
+    const { data, error } = await safeDbQuery(
+      supabase
+        .from('ita_sales')
+        .select('*')
+        .eq('person_id', personId)
+        .eq('is_deleted', false)
+        .order('sale_date', { ascending: false })
+        .order('created_at', { ascending: false })
+    )
 
     if (error && isTableMissingError(error)) {
       notifyDbStatus(true)
@@ -1289,13 +1381,15 @@ export async function softDeleteItaSale(saleId) {
 
 export async function getItaPaymentsByPerson(personId) {
   try {
-    const { data, error } = await supabase
-      .from('ita_payments')
-      .select('*')
-      .eq('person_id', personId)
-      .eq('is_deleted', false)
-      .order('payment_date', { ascending: false })
-      .order('created_at', { ascending: false })
+    const { data, error } = await safeDbQuery(
+      supabase
+        .from('ita_payments')
+        .select('*')
+        .eq('person_id', personId)
+        .eq('is_deleted', false)
+        .order('payment_date', { ascending: false })
+        .order('created_at', { ascending: false })
+    )
 
     if (error && isTableMissingError(error)) {
       notifyDbStatus(true)
