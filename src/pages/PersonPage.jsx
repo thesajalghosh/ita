@@ -445,25 +445,24 @@ export default function PersonPage() {
                   <span>{entrySortOrder === 'newest' ? 'New' : 'Old'}</span>
                 </button>
 
-                <button
-                  onClick={() => setShowAddCalc(true)}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-neutral-900 text-white text-xs font-bold active:scale-95 transition-all"
-                >
-                  <Plus className="w-2.5 h-2.5" />
-                  <span>Column</span>
-                </button>
+                {settings.show_add_column && (
+                  <button
+                    onClick={() => setShowAddCalc(true)}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-neutral-900 text-white text-xs font-bold active:scale-95 transition-all"
+                  >
+                    <Plus className="w-2.5 h-2.5" />
+                    <span>Column</span>
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* ═══════════════════════════════════════════════════════════════
-                ★ 3 CALCULATION COLUMNS ON ONE MOBILE SCREEN ★
-                Always grid-cols-3, compact sizing, scrollable entries
-                ═══════════════════════════════════════════════════════════════ */}
             <div
-              className={`pb-2 ${calculations.length <= 3
-                ? 'grid grid-cols-3 gap-2'
-                : 'flex gap-2 overflow-x-auto snap-x snap-mandatory pb-2 scrollbar-none'
-                }`}
+              className={`pb-2 ${
+                calculations.length > 3
+                  ? 'flex gap-2 overflow-x-auto snap-x snap-mandatory scrollbar-none'
+                  : `grid ${calculations.length === 2 ? 'grid-cols-2' : calculations.length < 2 ? 'grid-cols-1' : 'grid-cols-3'} gap-2`
+              }`}
             >
               {calculations.map((calc) => {
                 const rawEntries = entriesMap[calc.id] || []
@@ -489,7 +488,7 @@ export default function PersonPage() {
                   <div
                     key={calc.id}
                     className={`flex flex-col ${calculations.length > 3
-                        ? 'w-[calc((100%-8px)/3)] min-w-[calc((100%-8px)/3)] shrink-0 snap-start'
+                        ? 'w-[calc((100%-16px)/3)] min-w-[calc((100%-16px)/3)] shrink-0 snap-start'
                         : 'min-w-0'
                       }`}
                   >
@@ -633,13 +632,15 @@ export default function PersonPage() {
                   <Hash className="w-6 h-6 text-neutral-400" />
                 </div>
                 <p className="text-xs font-medium text-neutral-500 mb-3">No calculation columns yet</p>
-                <button
-                  onClick={() => setShowAddCalc(true)}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-neutral-900 text-white text-xs font-semibold shadow-sm active:scale-95 transition-all"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Add First Column</span>
-                </button>
+                {settings.show_add_column && (
+                  <button
+                    onClick={() => setShowAddCalc(true)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-neutral-900 text-white text-xs font-semibold shadow-sm active:scale-95 transition-all"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add First Column</span>
+                  </button>
+                )}
               </div>
             )}
           </>

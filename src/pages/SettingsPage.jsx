@@ -10,6 +10,7 @@ import {
   Shield,
   Pencil,
   Trash2,
+  Plus,
   LogOut,
   User,
   Database,
@@ -233,6 +234,39 @@ export default function SettingsPage() {
                 <span
                   className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${
                     settings.allow_delete ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Add Column Button Toggle */}
+            <div className="flex items-center justify-between p-3.5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-neutral-100 text-neutral-600 flex items-center justify-center">
+                  <Plus className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-neutral-900">Show Add Column Button</p>
+                  <p className="text-[10px] text-neutral-400 font-medium">
+                    Show column creation controls
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                role="switch"
+                aria-checked={Boolean(settings.show_add_column)}
+                aria-label="Show Add Column Button"
+                onClick={() => handleToggle('show_add_column')}
+                disabled={saving}
+                className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
+                  settings.show_add_column ? 'bg-emerald-500' : 'bg-neutral-200'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                    settings.show_add_column ? 'translate-x-5' : 'translate-x-0'
                   }`}
                 />
               </button>

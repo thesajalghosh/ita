@@ -10,13 +10,18 @@ export function useSettings() {
 }
 
 const LOCAL_SETTINGS_KEY = 'ita_app_settings'
+const DEFAULT_SETTINGS = {
+  allow_edit: false,
+  allow_delete: false,
+  show_add_column: true,
+}
 
 function getLocalSettings(userId) {
   try {
     const raw = localStorage.getItem(`${LOCAL_SETTINGS_KEY}_${userId || 'default'}`)
-    return raw ? JSON.parse(raw) : { allow_edit: false, allow_delete: false }
+    return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : DEFAULT_SETTINGS
   } catch {
-    return { allow_edit: false, allow_delete: false }
+    return DEFAULT_SETTINGS
   }
 }
 
@@ -30,7 +35,7 @@ function setLocalSettings(userId, settings) {
 
 export function SettingsProvider({ children }) {
   const { user } = useAuth()
-  const [settings, setSettings] = useState({ allow_edit: false, allow_delete: false })
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS)
   const [loading, setLoading] = useState(true)
 
   const fetchSettings = useCallback(async () => {
@@ -59,13 +64,21 @@ export function SettingsProvider({ children }) {
           .insert({ user_id: user.id, allow_edit: false, allow_delete: false })
           .select()
           .single()
-        if (newData) setSettings(newData)
+        if (newData) {
+          setSettings({
+            ...newData,
+            show_add_column: getLocalSettings(user.id).show_add_column,
+          })
+        }
       } else if (error && isTableMissingError(error)) {
         // Table not found in schema cache - fallback to local storage
         const local = getLocalSettings(user.id)
         setSettings(local)
       } else if (data) {
-        setSettings(data)
+        setSettings({
+          ...data,
+          show_add_column: getLocalSettings(user.id).show_add_column,
+        })
       } else {
         const local = getLocalSettings(user.id)
         setSettings(local)
@@ -91,17 +104,28 @@ export function SettingsProvider({ children }) {
 
     if (!user || user.is_offline) return { data: newSettings, error: null }
 
+    const cloudUpdates = Object.fromEntries(
+      Object.entries(updates).filter(([key]) => key !== 'show_add_column')
+    )
+    if (Object.keys(cloudUpdates).length === 0) {
+      return { data: newSettings, error: null }
+    }
+
     try {
       const { data, error } = await supabase
         .from('app_settings')
-        .update({ ...updates, updated_at: new Date().toISOString() })
+        .update({ ...cloudUpdates, updated_at: new Date().toISOString() })
         .eq('user_id', user.id)
         .select()
         .single()
 
       if (!error && data) {
-        setSettings(data)
-        return { data, error: null }
+        const mergedSettings = {
+          ...data,
+          show_add_column: newSettings.show_add_column,
+        }
+        setSettings(mergedSettings)
+        return { data: mergedSettings, error: null }
       }
 
       if (error && isTableMissingError(error)) {
