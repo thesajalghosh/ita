@@ -139,24 +139,24 @@ export default function DashboardPage() {
       <div className="px-4 py-6 max-w-lg mx-auto space-y-7">
         {/* ─── Stats Row ─── */}
         <div className="grid grid-cols-2 gap-3">
-          <div className="bg-white rounded-2xl p-4 border border-neutral-200/60 shadow-card">
-            <div className="flex items-center justify-between text-neutral-500 mb-1.5">
-              <span className="text-xs font-bold uppercase tracking-wider">Total Persons</span>
-              <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center">
-                <Users className="w-3.5 h-3.5 text-emerald-600" />
+          <div className="bg-white rounded-2xl p-3 border border-neutral-200/60 shadow-card">
+            <div className="flex items-center justify-between text-neutral-500 mb-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider">Total Persons</span>
+              <div className="w-6 h-6 rounded-lg bg-emerald-50 flex items-center justify-center">
+                <Users className="w-3 h-3 text-emerald-600" />
               </div>
             </div>
-            <p className="text-3xl font-extrabold tracking-tight text-neutral-900">{totalPersons}</p>
+            <p className="text-2xl font-extrabold tracking-tight text-neutral-900">{totalPersons}</p>
           </div>
 
-          <div className="bg-white rounded-2xl p-4 border border-neutral-200/60 shadow-card">
-            <div className="flex items-center justify-between text-neutral-500 mb-1.5">
-              <span className="text-xs font-bold uppercase tracking-wider">Categories</span>
-              <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
-                <LayoutGrid className="w-3.5 h-3.5 text-blue-600" />
+          <div className="bg-white rounded-2xl p-3 border border-neutral-200/60 shadow-card">
+            <div className="flex items-center justify-between text-neutral-500 mb-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider">Categories</span>
+              <div className="w-6 h-6 rounded-lg bg-blue-50 flex items-center justify-center">
+                <LayoutGrid className="w-3 h-3 text-blue-600" />
               </div>
             </div>
-            <p className="text-3xl font-extrabold tracking-tight text-neutral-900">{categories.length}</p>
+            <p className="text-2xl font-extrabold tracking-tight text-neutral-900">{categories.length}</p>
           </div>
         </div>
 
