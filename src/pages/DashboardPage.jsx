@@ -78,31 +78,31 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-neutral-50 to-neutral-100/50 safe-area-top safe-area-bottom pb-12">
       {/* ─── Top Header ─── */}
-      <div className="glass border-b border-neutral-200/60 px-4 pt-3 pb-3 sticky top-0 z-20 shadow-card space-y-2.5">
+      <div className="glass border-b border-neutral-200/60 px-4 pt-4 pb-4 sticky top-0 z-20 shadow-card space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-neutral-900 to-neutral-700 text-white flex items-center justify-center shadow-md">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-neutral-900 to-neutral-700 text-white flex items-center justify-center shadow-md">
               <Building2 className="w-5 h-5 text-neutral-100" />
             </div>
             <div>
-              <h1 className="text-[15px] font-bold text-neutral-900 tracking-tight leading-tight">
+              <h1 className="text-base font-bold text-neutral-900 tracking-tight leading-tight">
                 Brick Kiln Hisab
               </h1>
-              <p className="text-[10px] text-neutral-400 font-medium">Management System</p>
+              <p className="text-xs text-neutral-500 font-medium">Management System</p>
             </div>
           </div>
 
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => navigate('/settings')}
-              className="w-8 h-8 rounded-xl bg-neutral-100 hover:bg-neutral-200/80 active:scale-95 transition-all flex items-center justify-center text-neutral-600"
+              className="w-10 h-10 rounded-xl bg-neutral-100 hover:bg-neutral-200/80 active:scale-95 transition-all flex items-center justify-center text-neutral-600"
               title="Settings"
             >
               <Settings className="w-4 h-4" />
             </button>
             <button
               onClick={signOut}
-              className="w-8 h-8 rounded-xl bg-neutral-100 hover:bg-neutral-200/80 active:scale-95 transition-all flex items-center justify-center text-neutral-600"
+              className="w-10 h-10 rounded-xl bg-neutral-100 hover:bg-neutral-200/80 active:scale-95 transition-all flex items-center justify-center text-neutral-600"
               title="Sign Out"
             >
               <LogOut className="w-4 h-4" />
@@ -111,53 +111,65 @@ export default function DashboardPage() {
         </div>
 
         {/* Search Bar */}
-        <div className="relative">
+        <form
+          className="relative"
+          onSubmit={(event) => {
+            event.preventDefault()
+            handleSearch()
+          }}
+        >
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            placeholder="Search person across all categories..."
-            className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-neutral-100/80 hover:bg-neutral-100 focus:bg-white border border-transparent focus:border-neutral-300 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-200/80 transition-all"
+            placeholder="Search by person name or phone..."
+            aria-label="Search people by name or phone"
+            className="w-full pl-10 pr-12 py-3 rounded-xl bg-neutral-100/80 hover:bg-neutral-100 focus:bg-white border border-transparent focus:border-neutral-300 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-200/80 transition-all"
           />
-        </div>
+          <button
+            type="submit"
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-neutral-700 focus-visible:ring-2 focus-visible:ring-neutral-500"
+          >
+            Search
+          </button>
+        </form>
       </div>
 
-      <div className="px-3 py-3 max-w-lg mx-auto space-y-4">
+      <div className="px-4 py-6 max-w-lg mx-auto space-y-7">
         {/* ─── Stats Row ─── */}
-        <div className="grid grid-cols-2 gap-2.5">
-          <div className="bg-white rounded-2xl p-3.5 border border-neutral-200/60 shadow-card">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-white rounded-2xl p-4 border border-neutral-200/60 shadow-card">
             <div className="flex items-center justify-between text-neutral-500 mb-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider">Total Persons</span>
+              <span className="text-xs font-bold uppercase tracking-wider">Total Persons</span>
               <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center">
                 <Users className="w-3.5 h-3.5 text-emerald-600" />
               </div>
             </div>
-            <p className="text-2xl font-extrabold tracking-tight text-neutral-900">{totalPersons}</p>
+            <p className="text-3xl font-extrabold tracking-tight text-neutral-900">{totalPersons}</p>
           </div>
 
-          <div className="bg-white rounded-2xl p-3.5 border border-neutral-200/60 shadow-card">
+          <div className="bg-white rounded-2xl p-4 border border-neutral-200/60 shadow-card">
             <div className="flex items-center justify-between text-neutral-500 mb-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider">Categories</span>
+              <span className="text-xs font-bold uppercase tracking-wider">Categories</span>
               <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
                 <LayoutGrid className="w-3.5 h-3.5 text-blue-600" />
               </div>
             </div>
-            <p className="text-2xl font-extrabold tracking-tight text-neutral-900">{categories.length}</p>
+            <p className="text-3xl font-extrabold tracking-tight text-neutral-900">{categories.length}</p>
           </div>
         </div>
 
         {/* ─── Categories Grid ─── */}
-        <div className="space-y-2">
+        <div className="space-y-3">
           <div className="flex items-center justify-between px-0.5">
-            <h2 className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">
+            <h2 className="text-sm font-bold text-neutral-600 uppercase tracking-wider">
               Account Categories
             </h2>
-            <span className="text-[10px] text-neutral-400 font-medium">{categories.length} sections</span>
+            <span className="text-xs text-neutral-500 font-medium">{categories.length} sections</span>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-3">
             {categories.map((cat) => {
               const IconComponent = ICON_MAP[cat.icon] || HardHat
               const count = stats[cat.id]?.personCount || 0
@@ -165,22 +177,22 @@ export default function DashboardPage() {
                 <button
                   key={cat.id}
                   onClick={() => navigate(`/category/${cat.id}`)}
-                  className="bg-white rounded-2xl p-3 text-left border border-neutral-200/60 hover:border-neutral-300 shadow-card hover:shadow-soft active:scale-[0.98] transition-all group"
+                  className="bg-white rounded-2xl p-4 text-left border border-neutral-200/60 hover:border-neutral-300 shadow-card hover:shadow-soft active:scale-[0.98] transition-all group focus-visible:outline-2 focus-visible:outline-emerald-600"
                 >
                   <div className="flex items-center justify-between mb-2.5">
                     <div
-                      className={`w-9 h-9 rounded-xl ${cat.color} text-white flex items-center justify-center shadow-sm`}
+                      className={`w-11 h-11 rounded-xl ${cat.color} text-white flex items-center justify-center shadow-sm`}
                     >
-                      <IconComponent className="w-4 h-4" />
+                      <IconComponent className="w-5 h-5" />
                     </div>
                     <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-neutral-500 group-hover:translate-x-0.5 transition-all" />
                   </div>
 
                   <div>
-                    <h3 className="font-bold text-neutral-900 text-xs truncate tracking-tight mb-0.5">
+                    <h3 className="font-bold text-neutral-900 text-sm truncate tracking-tight mb-1">
                       {cat.name}
                     </h3>
-                    <p className="text-[10px] text-neutral-400 font-medium">
+                    <p className="text-xs text-neutral-500 font-medium">
                       {count} {count === 1 ? 'person' : 'persons'}
                     </p>
                   </div>
@@ -192,12 +204,12 @@ export default function DashboardPage() {
 
         {/* ─── Recent Transactions ─── */}
         {recentEntries.length > 0 && (
-          <div className="space-y-2">
+          <div className="space-y-3">
             <div className="flex items-center justify-between px-0.5">
-              <h2 className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">
+              <h2 className="text-sm font-bold text-neutral-600 uppercase tracking-wider">
                 Recent Transactions
               </h2>
-              <span className="text-[10px] text-neutral-400 font-medium">Latest activity</span>
+              <span className="text-xs text-neutral-500 font-medium">Latest activity</span>
             </div>
 
             <div className="bg-white rounded-2xl border border-neutral-200/60 shadow-card divide-y divide-neutral-100 overflow-hidden">
@@ -213,7 +225,7 @@ export default function DashboardPage() {
                       navigate(`/person/${entry.person_id}`)
                     }
                   }}
-                  className="flex items-center justify-between px-3 py-2.5 hover:bg-neutral-50 active:bg-neutral-100 cursor-pointer transition-colors"
+                  className="flex items-center justify-between px-4 py-3 hover:bg-neutral-50 active:bg-neutral-100 cursor-pointer transition-colors"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     <div className="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center shrink-0">
@@ -223,7 +235,7 @@ export default function DashboardPage() {
                       <p className="text-xs font-semibold text-neutral-900 truncate">
                         {entry.persons?.name || 'Unnamed Person'}
                       </p>
-                      <p className="text-[9px] text-neutral-400 truncate">
+                      <p className="text-xs text-neutral-500 truncate">
                         {entry.calculations?.name} · {formatDate(entry.entry_date)}
                       </p>
                     </div>

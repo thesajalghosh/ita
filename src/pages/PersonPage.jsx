@@ -353,7 +353,7 @@ export default function PersonPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-neutral-50 to-neutral-100/50 safe-area-top safe-area-bottom pb-20">
       {/* ─── Sticky Header ─── */}
-      <div className="glass border-b border-neutral-200/60 px-3 py-2 sticky top-0 z-20 shadow-card">
+      <div className="glass border-b border-neutral-200/60 px-4 py-3 sticky top-0 z-20 shadow-card">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <button
@@ -364,7 +364,7 @@ export default function PersonPage() {
             </button>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <h1 className="text-[13px] sm:text-sm font-bold text-neutral-900 truncate">
+                <h1 className="text-sm font-bold text-neutral-900 truncate">
                   {person.name}
                 </h1>
                 <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${category?.colorLight} ${category?.colorText} border ${category?.colorBorder}`}>
@@ -372,7 +372,7 @@ export default function PersonPage() {
                 </span>
               </div>
               {person.phone && (
-                <p className="text-[9px] text-neutral-400 font-mono flex items-center gap-0.5 mt-0.5">
+                <p className="text-xs text-neutral-500 font-mono flex items-center gap-1 mt-0.5">
                   <Phone className="w-2.5 h-2.5" />
                   {person.phone}
                 </p>
@@ -399,7 +399,7 @@ export default function PersonPage() {
         </div>
       </div>
 
-      <div className="px-2 py-2.5 space-y-2">
+      <div className="px-4 py-4 space-y-4 max-w-lg mx-auto">
         {person.category === 'ita_sell' ? (
           /* Specialized Weekly ITA Sales & Payment System for ITA Sell Person */
           <ItaSellWeeklyView person={person} onRefreshDashboard={loadData} />
@@ -407,18 +407,18 @@ export default function PersonPage() {
           <>
             {/* ─── Quantity Summaries ─── */}
             {Object.keys(quantitySummary).length > 0 && (
-              <div className="flex gap-1 overflow-x-auto pb-0.5 scrollbar-none">
+              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
                 {Object.entries(quantitySummary).map(([name, total]) => (
                   <div
                     key={name}
-                    className="bg-white rounded-lg px-2 py-1 border border-neutral-200/70 shadow-card shrink-0 flex items-center gap-1.5"
+                    className="bg-white rounded-xl px-3 py-2 border border-neutral-200/70 shadow-card shrink-0 flex items-center gap-2"
                   >
                     <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
                     <div className="min-w-0">
-                      <span className="text-[8px] text-neutral-400 block font-medium truncate max-w-[100px] leading-tight">
+                      <span className="text-xs text-neutral-500 block font-medium truncate max-w-[140px] leading-tight">
                         {name}
                       </span>
-                      <span className="text-[11px] font-bold text-neutral-900">{formatNumber(total)}</span>
+                      <span className="text-sm font-bold text-neutral-900">{formatNumber(total)}</span>
                     </div>
                   </div>
                 ))}
@@ -428,7 +428,7 @@ export default function PersonPage() {
             {/* ─── Section Header ─── */}
             <div className="flex items-center justify-between px-0.5">
               <div className="flex items-center gap-1">
-                <h2 className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">
+                <h2 className="text-xs font-bold text-neutral-600 uppercase tracking-wider">
                   Columns
                 </h2>
                 <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-neutral-200/70 text-neutral-600">
@@ -439,7 +439,7 @@ export default function PersonPage() {
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => setEntrySortOrder((o) => (o === 'newest' ? 'oldest' : 'newest'))}
-                  className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-white border border-neutral-200/70 text-neutral-500 text-[9px] font-medium shadow-card"
+                  className="flex items-center gap-1 px-2.5 py-2 rounded-md bg-white border border-neutral-200/70 text-neutral-600 text-xs font-medium shadow-card"
                 >
                   <ArrowUpDown className="w-2.5 h-2.5" />
                   <span>{entrySortOrder === 'newest' ? 'New' : 'Old'}</span>
@@ -447,7 +447,7 @@ export default function PersonPage() {
 
                 <button
                   onClick={() => setShowAddCalc(true)}
-                  className="flex items-center gap-0.5 px-2 py-1 rounded-lg bg-neutral-900 text-white text-[9px] font-bold active:scale-95 transition-all"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-neutral-900 text-white text-xs font-bold active:scale-95 transition-all"
                 >
                   <Plus className="w-2.5 h-2.5" />
                   <span>Column</span>
@@ -461,8 +461,8 @@ export default function PersonPage() {
                 ═══════════════════════════════════════════════════════════════ */}
             <div
               className={`pb-2 ${calculations.length <= 3
-                  ? 'grid grid-cols-3 gap-1'
-                  : 'flex gap-1 overflow-x-auto snap-x snap-mandatory pb-2 scrollbar-none'
+                ? 'grid grid-cols-3 gap-2'
+                : 'flex gap-2 overflow-x-auto snap-x snap-mandatory pb-2 scrollbar-none'
                 }`}
             >
               {calculations.map((calc) => {

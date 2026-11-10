@@ -436,44 +436,50 @@ export async function updatePerson(personId, updates) {
 
 export async function searchPersons(query, category = null) {
   const qLower = (query || '').toLowerCase().trim()
-  try {
-    let q = supabase
-      .from('persons')
-      .select('*')
-      .eq('is_active', true)
-      .ilike('name', `%${query}%`)
-    if (category) {
-      q = q.eq('category', category)
-    }
-    const { data, error } = await safeDbQuery(q.order('name'))
+  if (!qLower) return { data: [], error: null }
 
-    if (error && isTableMissingError(error)) {
+  const matchesLocal = (person) =>
+    person.is_active !== false &&
+    (!category || person.category === category) &&
+    (person.name?.toLowerCase().includes(qLower) ||
+      String(person.phone || '').includes(query.trim()))
+
+  try {
+    let nameQuery = supabase.from('persons').select('*').eq('is_active', true)
+      .ilike('name', `%${query.trim()}%`)
+    let phoneQuery = supabase.from('persons').select('*').eq('is_active', true)
+      .ilike('phone', `%${query.trim()}%`)
+    if (category) {
+      nameQuery = nameQuery.eq('category', category)
+      phoneQuery = phoneQuery.eq('category', category)
+    }
+    const [nameResult, phoneResult] = await Promise.all([
+      safeDbQuery(nameQuery.order('name')),
+      safeDbQuery(phoneQuery.order('name')),
+    ])
+
+    if (
+      (nameResult.error && isTableMissingError(nameResult.error)) ||
+      (phoneResult.error && isTableMissingError(phoneResult.error))
+    ) {
       notifyDbStatus(true)
-      const local = getLocalData('persons').filter(
-        (p) =>
-          p.is_active !== false &&
-          (!category || p.category === category) &&
-          p.name.toLowerCase().includes(qLower)
-      )
+      const local = getLocalData('persons').filter(matchesLocal)
       return { data: local, error: null }
     }
 
-    if (data) return { data, error: null }
+    const remoteById = new Map()
+    for (const person of [...(nameResult.data || []), ...(phoneResult.data || [])]) {
+      remoteById.set(person.id, person)
+    }
+    const remote = [...remoteById.values()]
+    const local = getLocalData('persons').filter(matchesLocal)
+    return {
+      data: mergePendingRecords(remote, local, 'local_', matchesLocal),
+      error: null,
+    }
 
-    const local = getLocalData('persons').filter(
-      (p) =>
-        p.is_active !== false &&
-        (!category || p.category === category) &&
-        p.name.toLowerCase().includes(qLower)
-    )
-    return { data: local, error: null }
   } catch {
-    const local = getLocalData('persons').filter(
-      (p) =>
-        p.is_active !== false &&
-        (!category || p.category === category) &&
-        p.name.toLowerCase().includes(qLower)
-    )
+    const local = getLocalData('persons').filter(matchesLocal)
     return { data: local, error: null }
   }
 }
