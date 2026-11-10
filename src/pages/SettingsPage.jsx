@@ -60,14 +60,19 @@ export default function SettingsPage() {
 
   const handleSync = async () => {
     setSyncing(true)
-    const res = await syncLocalDataToSupabase()
-    if (res.success) {
-      toast(res.message, 'success')
-      setDbReady(true)
-    } else {
-      toast(res.message, 'info')
+    try {
+      const res = await syncLocalDataToSupabase()
+      if (res.success) {
+        toast(res.message, 'success')
+        setDbReady(true)
+      } else {
+        toast(res.message, 'info')
+      }
+    } catch (error) {
+      toast(`Sync failed: ${error.message}`, 'error')
+    } finally {
+      setSyncing(false)
     }
-    setSyncing(false)
   }
 
   const handleLogout = async () => {

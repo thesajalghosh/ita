@@ -2,14 +2,13 @@ import { supabase } from '../lib/supabase'
 import { CATEGORIES, getCalendarWeekRange } from './constants'
 
 // Storage helpers for fallback mode (when Supabase tables aren't migrated yet or offline)
-const DB_STATUS_KEY = 'ita_db_status'
-
 export function isTableMissingError(error) {
   if (!error) return false
   const msg = String(error.message || '').toLowerCase()
   const code = String(error.code || '')
   const status = Number(error.status || error.statusCode || 0)
   return (
+    code === 'OFFLINE' ||
     code === 'PGRST205' ||
     code === '42P01' ||
     code === '57014' ||
@@ -39,23 +38,34 @@ export function isTableMissingError(error) {
 }
 
 // Timeout helper: prevents UI from freezing for 30-60s when Supabase is in 522/paused state
-export function withTimeout(promise, ms = 2500) {
+export function withTimeout(promise, ms = 10000) {
+  let timeoutId
   return Promise.race([
     promise,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Database request timed out (522/offline)')), ms)
-    ),
-  ])
+    new Promise((_, reject) => {
+      timeoutId = setTimeout(
+        () => reject(new Error(`Database request timed out after ${ms}ms`)),
+        ms
+      )
+    }),
+  ]).finally(() => clearTimeout(timeoutId))
 }
 
 function getActiveUserId() {
   try {
-    const raw = localStorage.getItem('sb-akehudqkkpddhyzhtojj-auth-token')
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      if (parsed?.user?.id) return parsed.user.id
-    }
     const offline = localStorage.getItem('ita_offline_user')
+    if (offline) {
+      const parsed = JSON.parse(offline)
+      if (parsed?.is_offline === true && parsed.id) return parsed.id
+    }
+
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key?.startsWith('sb-') && key.endsWith('-auth-token')) {
+        const parsed = JSON.parse(localStorage.getItem(key))
+        if (parsed?.user?.id) return parsed.user.id
+      }
+    }
     if (offline) {
       const parsed = JSON.parse(offline)
       if (parsed?.id) return parsed.id
@@ -66,52 +76,73 @@ function getActiveUserId() {
   return 'default_user'
 }
 
+function isOfflineSession() {
+  try {
+    return JSON.parse(localStorage.getItem('ita_offline_user') || 'null')?.is_offline === true
+  } catch {
+    return false
+  }
+}
+
 function getLocalData(key) {
   try {
     const uid = getActiveUserId()
     const primaryKey = `${key}_${uid}`
     const raw = localStorage.getItem(primaryKey)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed
-    }
+    if (raw) return JSON.parse(raw)
 
-    // Fallback: check default_user key
-    if (primaryKey !== `${key}_default_user`) {
-      const defRaw = localStorage.getItem(`${key}_default_user`)
-      if (defRaw) {
-        const parsed = JSON.parse(defRaw)
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed
-      }
-    }
-
-    // Fallback: search all other keys starting with `${key}_`
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i)
-      if (k === key || (k && k.startsWith(`${key}_`) && k !== primaryKey)) {
-        try {
-          const fallbackData = JSON.parse(localStorage.getItem(k))
-          if (Array.isArray(fallbackData) && fallbackData.length > 0) {
-            return fallbackData
-          }
-        } catch {}
-      }
-    }
-    return []
+    // Older versions also copied signed-in users' cache into this shared key.
+    const legacy = localStorage.getItem(`${key}_default_user`)
+    if (!legacy) return []
+    const parsed = JSON.parse(legacy)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((record) => record.user_id === uid || uid === 'default_user')
   } catch {
     return []
   }
+}
+
+function getPersonIdAliases() {
+  try {
+    return JSON.parse(localStorage.getItem(`ita_person_id_aliases_${getActiveUserId()}`) || '{}')
+  } catch {
+    return {}
+  }
+}
+
+function resolvePersonId(personId) {
+  return getPersonIdAliases()[personId] || personId
+}
+
+function savePersonIdAlias(localId, remoteId) {
+  const aliases = getPersonIdAliases()
+  aliases[localId] = remoteId
+  localStorage.setItem(`ita_person_id_aliases_${getActiveUserId()}`, JSON.stringify(aliases))
+}
+
+function saveLocalRecord(storageKey, idPrefix, recordData, defaults = {}) {
+  const timestamp = new Date().toISOString()
+  const record = {
+    id: `${idPrefix}${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    ...recordData,
+    ...defaults,
+    user_id: getActiveUserId(),
+    created_at: timestamp,
+    updated_at: timestamp,
+  }
+  const records = getLocalData(storageKey)
+  records.push(record)
+  setLocalData(storageKey, records)
+  return { data: record, error: null, localFallback: true }
 }
 
 function setLocalData(key, data) {
   try {
     const uid = getActiveUserId()
     localStorage.setItem(`${key}_${uid}`, JSON.stringify(data))
-    if (uid !== 'default_user') {
-      localStorage.setItem(`${key}_default_user`, JSON.stringify(data))
-    }
   } catch (err) {
     console.error('Local storage write error:', err)
+    throw err
   }
 }
 
@@ -132,25 +163,41 @@ function notifyDbStatus(isMissing) {
 
 // Helper to query with timeout and automatic fallback when Supabase is down
 export async function safeDbQuery(queryPromise) {
-  if (_tablesMissingDetected) {
-    return { data: null, error: { message: 'Database offline', code: 'OFFLINE' } }
+  if (isOfflineSession()) {
+    notifyDbStatus(true)
+    return {
+      data: null,
+      error: { message: 'This session is using device-local storage', code: 'OFFLINE' },
+    }
   }
+
   try {
-    return await withTimeout(queryPromise, 2500)
+    const result = await withTimeout(queryPromise)
+    notifyDbStatus(Boolean(result.error && isTableMissingError(result.error)))
+    return result
   } catch (err) {
     notifyDbStatus(true)
     return { data: null, error: err }
   }
 }
 
+function mergePendingRecords(remoteRecords, localRecords, idPrefix, predicate = () => true) {
+  const ids = new Set(remoteRecords.map((record) => record.id))
+  const pending = localRecords.filter(
+    (record) => record.id?.startsWith(idPrefix) && !ids.has(record.id) && predicate(record)
+  )
+  return [...remoteRecords, ...pending]
+}
+
 // Check database connection and schema
 export async function checkDatabaseSchema() {
   try {
-    const { error } = await withTimeout(supabase.from('persons').select('id').limit(1), 2500)
+    const { error } = await withTimeout(supabase.from('persons').select('id').limit(1))
     if (isTableMissingError(error)) {
       notifyDbStatus(true)
       return { ready: false, error }
     }
+
     notifyDbStatus(false)
     return { ready: true, error: null }
   } catch (err) {
@@ -183,7 +230,16 @@ export async function getPersonsByCategory(category) {
 
     if (!error && data) {
       notifyDbStatus(false)
-      return { data, error: null }
+      const local = getLocalData('persons')
+      return {
+        data: mergePendingRecords(
+          data,
+          local,
+          'local_',
+          (person) => person.category === category && person.is_active !== false
+        ),
+        error: null,
+      }
     }
 
     // fallback
@@ -215,7 +271,16 @@ export async function getAllPersons() {
 
     if (!error && data) {
       notifyDbStatus(false)
-      return { data, error: null }
+      const local = getLocalData('persons')
+      return {
+        data: mergePendingRecords(
+          data,
+          local,
+          'local_',
+          (person) => person.is_active !== false
+        ),
+        error: null,
+      }
     }
 
     const local = getLocalData('persons').filter((p) => p.is_active !== false)
@@ -228,29 +293,31 @@ export async function getAllPersons() {
 
 export async function getPersonById(personId) {
   try {
+    const resolvedId = resolvePersonId(personId)
     const { data, error } = await safeDbQuery(
       supabase
         .from('persons')
         .select('*')
-        .eq('id', personId)
+        .eq('id', resolvedId)
         .single()
     )
 
     if (error && isTableMissingError(error)) {
       notifyDbStatus(true)
       const local = getLocalData('persons')
-      const found = local.find((p) => p.id === personId)
+      const found = local.find((p) => p.id === resolvedId || p.id === personId)
       return { data: found || null, error: null }
     }
 
     if (data) return { data, error: null }
 
     const local = getLocalData('persons')
-    const found = local.find((p) => p.id === personId)
+    const found = local.find((p) => p.id === resolvedId || p.id === personId)
     return { data: found || null, error: null }
   } catch {
     const local = getLocalData('persons')
-    const found = local.find((p) => p.id === personId)
+    const resolvedId = resolvePersonId(personId)
+    const found = local.find((p) => p.id === resolvedId || p.id === personId)
     return { data: found || null, error: null }
   }
 }
@@ -265,15 +332,21 @@ export async function createPerson(personData) {
     is_active: true,
   }
 
+  if (isOfflineSession()) {
+    return saveLocalRecord('persons', 'local_', cleaned)
+  }
+
   try {
-    const { data: authData } = await supabase.auth.getUser()
+    const { data: authData } = isOfflineSession()
+      ? { data: { user: null } }
+      : await supabase.auth.getUser()
     const userId = authData?.user?.id || getActiveUserId()
 
-    const { data, error } = await supabase
+    const { data, error } = await withTimeout(supabase
       .from('persons')
       .insert({ ...cleaned, user_id: userId })
       .select()
-      .single()
+      .single())
 
     if (error && isTableMissingError(error)) {
       notifyDbStatus(true)
@@ -447,15 +520,21 @@ export async function getCalculationsByPerson(personId) {
 }
 
 export async function createCalculation(calcData) {
+  if (isOfflineSession()) {
+    return saveLocalRecord('calculations', 'calc_', calcData, { is_active: true })
+  }
+
   try {
-    const { data: authData } = await supabase.auth.getUser()
+    const { data: authData } = isOfflineSession()
+      ? { data: { user: null } }
+      : await supabase.auth.getUser()
     const userId = authData?.user?.id || getActiveUserId()
 
-    const { data, error } = await supabase
+    const { data, error } = await withTimeout(supabase
       .from('calculations')
       .insert({ ...calcData, user_id: userId })
       .select()
-      .single()
+      .single())
 
     if (error && isTableMissingError(error)) {
       notifyDbStatus(true)
@@ -572,7 +651,9 @@ export async function createDefaultCalculations(personId, category) {
   const categoryConfig = CATEGORIES[category]
   if (!categoryConfig) return { data: null, error: new Error('Invalid category') }
 
-  const { data: authData } = await supabase.auth.getUser()
+  const { data: authData } = isOfflineSession()
+    ? { data: { user: null } }
+    : await supabase.auth.getUser()
   const userId = authData?.user?.id || getActiveUserId()
 
   const calcs = categoryConfig.defaultCalculations.map((c, idx) => ({
@@ -584,11 +665,26 @@ export async function createDefaultCalculations(personId, category) {
     is_active: true,
   }))
 
+  if (isOfflineSession()) {
+    const timestamp = new Date().toISOString()
+    const localCalcs = calcs.map((calc, index) => ({
+      ...calc,
+      id: `calc_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 5)}`,
+      created_at: timestamp,
+      updated_at: timestamp,
+    }))
+    const local = getLocalData('calculations')
+    local.push(...localCalcs)
+    setLocalData('calculations', local)
+    return { data: localCalcs, error: null, localFallback: true }
+  }
+
   try {
-    const { data, error } = await supabase
+    const { data, error } = await withTimeout(supabase
       .from('calculations')
       .insert(calcs)
       .select()
+    )
 
     if (error && isTableMissingError(error)) {
       notifyDbStatus(true)
@@ -719,14 +815,20 @@ export async function getEntriesByPerson(personId) {
 
 export async function createEntry(entryData) {
   try {
-    const { data: authData } = await supabase.auth.getUser()
+    const { data: authData } = isOfflineSession()
+      ? { data: { user: null } }
+      : await supabase.auth.getUser()
     const userId = authData?.user?.id || getActiveUserId()
 
-    const { data, error } = await supabase
+    if (isOfflineSession()) {
+      return saveLocalRecord('entries', 'entry_', entryData, { is_deleted: false })
+    }
+
+    const { data, error } = await withTimeout(supabase
       .from('entries')
       .insert({ ...entryData, user_id: userId })
       .select()
-      .single()
+      .single())
 
     if (error && isTableMissingError(error)) {
       notifyDbStatus(true)
@@ -859,9 +961,11 @@ export async function softDeleteEntry(entryId) {
 
 export async function getPersonFinancialSummary(personId) {
   try {
-    const { data, error } = await supabase.rpc('get_person_financial_summary', {
-      p_person_id: personId,
-    })
+    const { data, error } = await safeDbQuery(
+      supabase.rpc('get_person_financial_summary', {
+        p_person_id: personId,
+      })
+    )
 
     if (!error && data && data.length > 0) {
       return { data, error: null }
@@ -994,12 +1098,14 @@ export async function getCategoryStats() {
 
 export async function getRecentEntries(limit = 10) {
   try {
-    const { data, error } = await supabase
-      .from('entries')
-      .select('*, calculations(name, calc_type), persons(name, category)')
-      .eq('is_deleted', false)
-      .order('created_at', { ascending: false })
-      .limit(limit)
+    const { data, error } = await safeDbQuery(
+      supabase
+        .from('entries')
+        .select('*, calculations(name, calc_type), persons(name, category)')
+        .eq('is_deleted', false)
+        .order('created_at', { ascending: false })
+        .limit(limit)
+    )
 
     if (error && isTableMissingError(error)) {
       notifyDbStatus(true)
@@ -1089,16 +1195,16 @@ export function generateItaSellCSV(sales, payments, personName) {
 }
 
 // Sync local data up to Supabase once tables are ready
-export async function syncLocalDataToSupabase() {
+async function performLocalDataSync() {
   const { ready } = await checkDatabaseSchema()
   if (!ready) {
     return {
       success: false,
-      message: 'Supabase tables are not found yet. Please run the SQL migration in Supabase SQL editor first.',
+      message: 'Supabase is unavailable or its database tables are not ready. Check the connection and migrations, then retry.',
     }
   }
 
-  const { data: authData } = await supabase.auth.getUser()
+  const { data: authData } = await withTimeout(supabase.auth.getUser())
   const userId = authData?.user?.id
   if (!userId) {
     return { success: false, message: 'Please log in to sync data.' }
@@ -1107,16 +1213,21 @@ export async function syncLocalDataToSupabase() {
   const localPersons = getLocalData('persons')
   const localCalcs = getLocalData('calculations')
   const localEntries = getLocalData('entries')
+  const localSales = getLocalData('ita_sales')
+  const localPayments = getLocalData('ita_payments')
 
   let syncedPersons = 0
   let syncedCalcs = 0
   let syncedEntries = 0
+  let syncedSales = 0
+  let syncedPayments = 0
+  let failedRecords = 0
 
   // 1. Sync Persons
   const personIdMap = {}
   for (const p of localPersons) {
     if (p.id?.startsWith('local_')) {
-      const { data, error } = await supabase
+      const { data, error } = await withTimeout(supabase
         .from('persons')
         .insert({
           name: p.name,
@@ -1126,10 +1237,15 @@ export async function syncLocalDataToSupabase() {
           user_id: userId,
         })
         .select()
-        .single()
+        .single())
       if (!error && data) {
         personIdMap[p.id] = data.id
+        savePersonIdAlias(p.id, data.id)
+        p.id = data.id
+        p.user_id = userId
         syncedPersons++
+      } else if (error) {
+        failedRecords++
       }
     }
   }
@@ -1139,7 +1255,7 @@ export async function syncLocalDataToSupabase() {
   for (const c of localCalcs) {
     if (c.id?.startsWith('calc_')) {
       const targetPersonId = personIdMap[c.person_id] || c.person_id
-      const { data, error } = await supabase
+      const { data, error } = await withTimeout(supabase
         .from('calculations')
         .insert({
           person_id: targetPersonId,
@@ -1150,10 +1266,15 @@ export async function syncLocalDataToSupabase() {
           is_active: c.is_active !== false,
         })
         .select()
-        .single()
+        .single())
       if (!error && data) {
         calcIdMap[c.id] = data.id
+        c.id = data.id
+        c.person_id = targetPersonId
+        c.user_id = userId
         syncedCalcs++
+      } else if (error) {
+        failedRecords++
       }
     }
   }
@@ -1163,7 +1284,7 @@ export async function syncLocalDataToSupabase() {
     if (e.id?.startsWith('entry_')) {
       const targetPersonId = personIdMap[e.person_id] || e.person_id
       const targetCalcId = calcIdMap[e.calculation_id] || e.calculation_id
-      const { error } = await supabase.from('entries').insert({
+      const { error } = await withTimeout(supabase.from('entries').insert({
         person_id: targetPersonId,
         calculation_id: targetCalcId,
         user_id: userId,
@@ -1173,16 +1294,98 @@ export async function syncLocalDataToSupabase() {
         transaction_type: e.transaction_type || null,
         description: e.description || null,
         is_deleted: e.is_deleted === true,
-      })
-      if (!error) syncedEntries++
+      }))
+      if (!error) {
+        e.id = undefined
+        e.person_id = targetPersonId
+        e.calculation_id = targetCalcId
+        e.user_id = userId
+        syncedEntries++
+      } else {
+        failedRecords++
+      }
     }
   }
 
-  notifyDbStatus(false)
-  return {
-    success: true,
-    message: `Synced ${syncedPersons} persons, ${syncedCalcs} calculations, and ${syncedEntries} entries to Supabase!`,
+  for (const sale of localSales) {
+    if (sale.id?.startsWith('sale_')) {
+      const { data, error } = await withTimeout(supabase
+        .from('ita_sales')
+        .insert({
+          person_id: personIdMap[sale.person_id] || sale.person_id,
+          user_id: userId,
+          sale_date: sale.sale_date,
+          quantity: sale.quantity,
+          rate_per_thousand: sale.rate_per_thousand,
+          sales_amount: sale.sales_amount,
+          note: sale.note || null,
+          week_start_date: sale.week_start_date,
+          week_end_date: sale.week_end_date,
+          is_deleted: sale.is_deleted === true,
+        })
+        .select()
+        .single())
+      if (!error && data) {
+        sale.id = data.id
+        sale.person_id = data.person_id
+        sale.user_id = userId
+        syncedSales++
+      } else if (error) {
+        failedRecords++
+      }
+    }
   }
+
+  for (const payment of localPayments) {
+    if (payment.id?.startsWith('payment_')) {
+      const { data, error } = await withTimeout(supabase
+        .from('ita_payments')
+        .insert({
+          person_id: personIdMap[payment.person_id] || payment.person_id,
+          user_id: userId,
+          payment_date: payment.payment_date,
+          amount: payment.amount,
+          week_start_date: payment.week_start_date,
+          week_end_date: payment.week_end_date,
+          note: payment.note || null,
+          is_deleted: payment.is_deleted === true,
+        })
+        .select()
+        .single())
+      if (!error && data) {
+        payment.id = data.id
+        payment.person_id = data.person_id
+        payment.user_id = userId
+        syncedPayments++
+      } else if (error) {
+        failedRecords++
+      }
+    }
+  }
+
+  setLocalData('persons', localPersons)
+  setLocalData('calculations', localCalcs)
+  setLocalData('entries', localEntries.filter((entry) => entry.id))
+  setLocalData('ita_sales', localSales)
+  setLocalData('ita_payments', localPayments)
+
+  notifyDbStatus(failedRecords > 0)
+  return {
+    success: failedRecords === 0,
+    message: failedRecords === 0
+      ? `Synced ${syncedPersons} persons, ${syncedCalcs} calculations, ${syncedEntries} entries, ${syncedSales} ITA sales, and ${syncedPayments} ITA payments to Supabase!`
+      : `Synced available records, but ${failedRecords} records could not be uploaded. They will be retried; check the database connection and permissions.`,
+  }
+}
+
+let syncPromise = null
+export function syncLocalDataToSupabase() {
+  if (!syncPromise) {
+    syncPromise = performLocalDataSync().finally(() => {
+      syncPromise = null
+    })
+  }
+  return syncPromise
 }
 
 // ============================================
@@ -1210,7 +1413,18 @@ export async function getItaSalesByPerson(personId) {
       return { data: local, error: null }
     }
 
-    if (data) return { data, error: null }
+    if (data) {
+      const local = getLocalData('ita_sales')
+      return {
+        data: mergePendingRecords(
+          data,
+          local,
+          'sale_',
+          (sale) => sale.person_id === personId && sale.is_deleted !== true
+        ),
+        error: null,
+      }
+    }
 
     const local = getLocalData('ita_sales').filter(
       (s) => s.person_id === personId && s.is_deleted !== true
@@ -1228,7 +1442,9 @@ export async function getItaSalesByPerson(personId) {
 
 export async function createItaSale(saleData) {
   try {
-    const { data: authData } = await supabase.auth.getUser()
+    const { data: authData } = isOfflineSession()
+      ? { data: { user: null } }
+      : await supabase.auth.getUser()
     const userId = authData?.user?.id || getActiveUserId()
 
     const weekRange = getCalendarWeekRange(saleData.sale_date)
@@ -1239,11 +1455,15 @@ export async function createItaSale(saleData) {
       week_end_date: saleData.week_end_date || weekRange.end,
     }
 
-    const { data, error } = await supabase
+    if (isOfflineSession()) {
+      return saveLocalRecord('ita_sales', 'sale_', payload, { is_deleted: false })
+    }
+
+    const { data, error } = await withTimeout(supabase
       .from('ita_sales')
       .insert(payload)
       .select()
-      .single()
+      .single())
 
     if (error && isTableMissingError(error)) {
       notifyDbStatus(true)
@@ -1257,7 +1477,7 @@ export async function createItaSale(saleData) {
       const local = getLocalData('ita_sales')
       local.push(newSale)
       setLocalData('ita_sales', local)
-      return { data: newSale, error: null }
+      return { data: newSale, error: null, localFallback: true }
     }
 
     if (error) throw error
@@ -1280,7 +1500,7 @@ export async function createItaSale(saleData) {
       const local = getLocalData('ita_sales')
       local.push(newSale)
       setLocalData('ita_sales', local)
-      return { data: newSale, error: null }
+      return { data: newSale, error: null, localFallback: true }
     }
     return { data: null, error: err }
   }
@@ -1313,7 +1533,18 @@ export async function updateItaSale(saleId, updates) {
       }
     }
 
-    if (data) return { data, error: null }
+    if (data) {
+      const local = getLocalData('ita_payments')
+      return {
+        data: mergePendingRecords(
+          data,
+          local,
+          'payment_',
+          (payment) => payment.person_id === personId && payment.is_deleted !== true
+        ),
+        error: null,
+      }
+    }
 
     const local = getLocalData('ita_sales')
     const idx = local.findIndex((s) => s.id === saleId)
@@ -1400,7 +1631,18 @@ export async function getItaPaymentsByPerson(personId) {
       return { data: local, error: null }
     }
 
-    if (data) return { data, error: null }
+    if (data) {
+      const local = getLocalData('ita_payments')
+      return {
+        data: mergePendingRecords(
+          data,
+          local,
+          'payment_',
+          (payment) => payment.person_id === personId && payment.is_deleted !== true
+        ),
+        error: null,
+      }
+    }
 
     const local = getLocalData('ita_payments').filter(
       (p) => p.person_id === personId && p.is_deleted !== true
@@ -1418,7 +1660,9 @@ export async function getItaPaymentsByPerson(personId) {
 
 export async function createItaPayment(paymentData) {
   try {
-    const { data: authData } = await supabase.auth.getUser()
+    const { data: authData } = isOfflineSession()
+      ? { data: { user: null } }
+      : await supabase.auth.getUser()
     const userId = authData?.user?.id || getActiveUserId()
 
     const payload = {
@@ -1426,11 +1670,15 @@ export async function createItaPayment(paymentData) {
       user_id: userId,
     }
 
-    const { data, error } = await supabase
+    if (isOfflineSession()) {
+      return saveLocalRecord('ita_payments', 'payment_', payload, { is_deleted: false })
+    }
+
+    const { data, error } = await withTimeout(supabase
       .from('ita_payments')
       .insert(payload)
       .select()
-      .single()
+      .single())
 
     if (error && isTableMissingError(error)) {
       notifyDbStatus(true)
@@ -1444,7 +1692,7 @@ export async function createItaPayment(paymentData) {
       const local = getLocalData('ita_payments')
       local.push(newPayment)
       setLocalData('ita_payments', local)
-      return { data: newPayment, error: null }
+      return { data: newPayment, error: null, localFallback: true }
     }
 
     if (error) throw error
@@ -1464,7 +1712,7 @@ export async function createItaPayment(paymentData) {
       const local = getLocalData('ita_payments')
       local.push(newPayment)
       setLocalData('ita_payments', local)
-      return { data: newPayment, error: null }
+      return { data: newPayment, error: null, localFallback: true }
     }
     return { data: null, error: err }
   }
@@ -1615,4 +1863,3 @@ export async function migrateLegacyItaSellEntries(personId) {
     return { migrated: false, error: err }
   }
 }
-

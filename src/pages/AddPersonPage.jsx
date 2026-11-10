@@ -55,16 +55,21 @@ export default function AddPersonPage() {
       })
 
       if (error) throw error
+      if (!person?.id) throw new Error('The person could not be loaded after saving')
 
       // Create default calculation sections for this category
-      if (person?.id) {
-        await createDefaultCalculations(person.id, currentCategory.id)
-      }
+      const { error: calculationsError } = await createDefaultCalculations(
+        person.id,
+        currentCategory.id
+      )
 
       if (localFallback) {
         toast(`${name} added to ${currentCategory.name} (saved locally)`, 'success')
       } else {
         toast(`${name} added to ${currentCategory.name}`, 'success')
+      }
+      if (calculationsError) {
+        toast(`Person saved, but default columns could not be created: ${calculationsError.message}`, 'warning')
       }
 
       navigate(`/category/${currentCategory.id}/person/${person.id}`, { replace: true })

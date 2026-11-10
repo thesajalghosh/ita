@@ -21,6 +21,7 @@ import {
 } from '../lib/api'
 import { useSettings } from '../contexts/SettingsContext'
 import ConfirmDialog from '../components/ConfirmDialog'
+import Modal from '../components/Modal'
 import { toast } from '../components/Toast'
 import {
   Plus,
@@ -370,7 +371,7 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
         toast('Sale record updated', 'success')
         setShowEditSale(null)
       } else {
-        const { error } = await createItaSale({
+        const { error, localFallback } = await createItaSale({
           person_id: person.id,
           sale_date: saleDate,
           quantity: qty,
@@ -381,7 +382,12 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
           week_end_date: weekRange.end,
         })
         if (error) throw error
-        toast('Sale entry saved successfully', 'success')
+        toast(
+          localFallback
+            ? 'Sale saved on this device and will sync when online'
+            : 'Sale entry saved successfully',
+          localFallback ? 'warning' : 'success'
+        )
         setShowAddSale(false)
         // Automatically expand this week
         setExpandedWeeks((prev) => ({ ...prev, [weekRange.start]: true }))
@@ -505,7 +511,7 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
         )
         setShowEditPayment(null)
       } else {
-        const { error } = await createItaPayment({
+        const { error, localFallback } = await createItaPayment({
           person_id: person.id,
           payment_date: paymentDate,
           amount: amt,
@@ -515,10 +521,12 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
         })
         if (error) throw error
         toast(
-          isExcess
-            ? 'Payment saved! Excess amount automatically added to next remaining week.'
-            : 'Payment saved successfully',
-          'success'
+          localFallback
+            ? 'Payment saved on this device and will sync when online'
+            : isExcess
+              ? 'Payment saved! Excess amount automatically added to next remaining week.'
+              : 'Payment saved successfully',
+          localFallback ? 'warning' : 'success'
         )
         setShowAddPayment(null)
         // Automatically expand the week where payment was posted
@@ -1063,15 +1071,13 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
           MODAL: ADD / EDIT ITA SALE
           ═══════════════════════════════════════════════════════════════ */}
       {(showAddSale || showEditSale) && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm"
-            onClick={() => {
+        <Modal
+          onClose={() => {
               setShowAddSale(false)
               setShowEditSale(null)
-            }}
-          />
-          <div className="slide-up relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 pb-8 sm:p-6 sm:pb-6 z-10 space-y-3.5 max-h-[85vh] overflow-y-auto shadow-2xl">
+          }}
+          panelClassName="p-5 pb-8 sm:p-6 sm:pb-6 space-y-3.5 max-h-[85vh]"
+        >
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-bold text-neutral-900">
@@ -1179,23 +1185,20 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
                 {saving ? 'Saving Sale...' : showEditSale ? 'Update Sale' : 'Save ITA Sale'}
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* ═══════════════════════════════════════════════════════════════
           MODAL: ADD / EDIT PAYMENT
           ═══════════════════════════════════════════════════════════════ */}
       {(showAddPayment || showEditPayment) && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm"
-            onClick={() => {
+        <Modal
+          onClose={() => {
               setShowAddPayment(null)
               setShowEditPayment(null)
-            }}
-          />
-          <div className="slide-up relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 pb-8 sm:p-6 sm:pb-6 z-10 space-y-3.5 max-h-[85vh] overflow-y-auto shadow-2xl">
+          }}
+          panelClassName="p-5 pb-8 sm:p-6 sm:pb-6 space-y-3.5 max-h-[85vh]"
+        >
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-bold text-neutral-900">
@@ -1302,8 +1305,7 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
                 {saving ? 'Saving Payment...' : showEditPayment ? 'Update Payment' : 'Save Payment'}
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* ═══════════════════════════════════════════════════════════════
@@ -1319,4 +1321,3 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
     </div>
   )
 }
-

@@ -31,6 +31,7 @@ import {
 import { useSettings } from '../contexts/SettingsContext'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ConfirmDialog from '../components/ConfirmDialog'
+import Modal from '../components/Modal'
 import ItaSellWeeklyView from '../components/ItaSellWeeklyView'
 import { toast } from '../components/Toast'
 import {
@@ -90,9 +91,10 @@ export default function PersonPage() {
     }
     setPerson(p)
 
-    // Normalize URL to /category/:categoryId/person/:personId if missing categoryId or mismatched
-    if (p.category && categoryId !== p.category) {
-      navigate(`/category/${p.category}/person/${personId}`, { replace: true })
+    // Keep stale local IDs and category-less deep links pointed at the synced account.
+    if (p.id !== personId || (p.category && categoryId !== p.category)) {
+      navigate(`/category/${p.category}/person/${p.id}`, { replace: true })
+      return
     }
 
     const { data: calcs } = await getCalculationsByPerson(personId)
@@ -128,7 +130,7 @@ export default function PersonPage() {
     if (qtyData) setQuantitySummary(qtyData)
 
     setLoading(false)
-  }, [personId])
+  }, [personId, categoryId, navigate])
 
   useEffect(() => {
     loadData()
@@ -646,9 +648,7 @@ export default function PersonPage() {
 
       {/* ═══ Add Calculation Modal ═══ */}
       {showAddCalc && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowAddCalc(false)} />
-          <div className="slide-up relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 pb-8 sm:p-6 sm:pb-6 z-10 space-y-4 max-h-[85vh] overflow-y-auto shadow-2xl">
+        <Modal onClose={() => setShowAddCalc(false)} panelClassName="p-5 pb-8 sm:p-6 sm:pb-6 space-y-4 max-h-[85vh]">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-neutral-900">New Column</h3>
               <button
@@ -713,15 +713,12 @@ export default function PersonPage() {
                 {saving ? 'Creating...' : 'Save Column'}
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* ═══ Add Entry Modal ═══ */}
       {showAddEntry && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowAddEntry(null)} />
-          <div className="slide-up relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 pb-8 sm:p-6 sm:pb-6 z-10 space-y-3.5 max-h-[85vh] overflow-y-auto shadow-2xl">
+        <Modal onClose={() => setShowAddEntry(null)} panelClassName="p-5 pb-8 sm:p-6 sm:pb-6 space-y-3.5 max-h-[85vh]">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-bold text-neutral-900">Add Entry</h3>
@@ -825,21 +822,18 @@ export default function PersonPage() {
                 {saving ? 'Saving...' : 'Save Entry'}
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* ═══ Edit Entry Modal ═══ */}
       {showEditEntry && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm"
-            onClick={() => {
+        <Modal
+          onClose={() => {
               setShowEditEntry(null)
               resetEntryForm()
-            }}
-          />
-          <div className="slide-up relative bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 pb-8 sm:p-6 sm:pb-6 z-10 space-y-3.5 max-h-[85vh] overflow-y-auto shadow-2xl">
+          }}
+          panelClassName="p-5 pb-8 sm:p-6 sm:pb-6 space-y-3.5 max-h-[85vh]"
+        >
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-neutral-900">Edit Entry</h3>
               <button
@@ -946,8 +940,7 @@ export default function PersonPage() {
                 {saving ? 'Updating...' : 'Update Entry'}
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* Delete Confirmation */}

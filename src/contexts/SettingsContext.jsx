@@ -38,6 +38,11 @@ export function SettingsProvider({ children }) {
       setLoading(false)
       return
     }
+    if (user.is_offline) {
+      setSettings(getLocalSettings(user.id))
+      setLoading(false)
+      return
+    }
     setLoading(true)
 
     try {
@@ -84,7 +89,7 @@ export function SettingsProvider({ children }) {
       setLocalSettings(user.id, newSettings)
     }
 
-    if (!user) return { data: newSettings, error: null }
+    if (!user || user.is_offline) return { data: newSettings, error: null }
 
     try {
       const { data, error } = await supabase

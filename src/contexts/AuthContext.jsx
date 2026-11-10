@@ -1,5 +1,16 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { syncLocalDataToSupabase } from '../lib/api'
+
+function withAuthTimeout(promise, ms = 10000) {
+  let timeoutId
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error('Connection timed out. Please try again.')), ms)
+    }),
+  ]).finally(() => clearTimeout(timeoutId))
+}
 
 const AuthContext = createContext({})
 
@@ -67,6 +78,26 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
+  useEffect(() => {
+    if (!user || user.is_offline) return undefined
+
+    const syncPendingData = () => {
+      if (navigator.onLine) {
+        syncLocalDataToSupabase().catch((error) => {
+          console.error('Unable to sync offline data:', error)
+        })
+      }
+    }
+
+    syncPendingData()
+    window.addEventListener('online', syncPendingData)
+    const retryInterval = window.setInterval(syncPendingData, 60000)
+    return () => {
+      window.removeEventListener('online', syncPendingData)
+      window.clearInterval(retryInterval)
+    }
+  }, [user])
+
   const signInOffline = (email = 'admin@brickkiln.local', name = 'Admin') => {
     const offlineUser = {
       id: 'default_user',
@@ -81,67 +112,36 @@ export function AuthProvider({ children }) {
 
   const signIn = async (email, password) => {
     try {
-      const authPromise = supabase.auth.signInWithPassword({
+      const { data, error } = await withAuthTimeout(supabase.auth.signInWithPassword({
         email,
         password,
-      })
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Connection timed out. Using local mode.')), 3500)
-      )
-
-      const { data, error } = await Promise.race([authPromise, timeoutPromise])
+      }))
 
       if (error) {
-        const msg = (error.message || '').toLowerCase()
-        const isConnError =
-          msg.includes('fetch') ||
-          msg.includes('network') ||
-          msg.includes('timeout') ||
-          msg.includes('timed out') ||
-          msg.includes('522') ||
-          msg.includes('502') ||
-          msg.includes('503') ||
-          msg.includes('doctype') ||
-          msg.includes('unexpected token')
-
-        if (isConnError) {
-          return signInOffline(email)
-        }
         return { data, error }
       }
 
       localStorage.removeItem('ita_offline_user')
       return { data, error: null }
     } catch (err) {
-      return signInOffline(email)
+      return { data: null, error: err }
     }
   }
 
   const signUp = async (email, password, fullName) => {
     try {
-      const authPromise = supabase.auth.signUp({
+      const { data, error } = await withAuthTimeout(supabase.auth.signUp({
         email,
         password,
         options: {
           data: { full_name: fullName },
         },
-      })
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Connection timed out')), 3500)
-      )
+      }))
 
-      const { data, error } = await Promise.race([authPromise, timeoutPromise])
-
-      if (error) {
-        const msg = (error.message || '').toLowerCase()
-        if (msg.includes('fetch') || msg.includes('network') || msg.includes('522')) {
-          return signInOffline(email, fullName)
-        }
-        return { data, error }
-      }
+      if (error) return { data, error }
       return { data, error }
-    } catch {
-      return signInOffline(email, fullName)
+    } catch (error) {
+      return { data: null, error }
     }
   }
 
