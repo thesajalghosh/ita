@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { toast } from '../components/Toast'
-import { checkDatabaseSchema, syncLocalDataToSupabase } from '../lib/api'
+import { checkDatabaseSchema } from '../lib/api'
 import { SUPABASE_SCHEMA_SQL } from '../lib/schemaSql'
 import {
   ArrowLeft,
@@ -18,8 +18,6 @@ import {
   Check,
   ExternalLink,
   RefreshCw,
-  CheckCircle2,
-  AlertCircle,
 } from 'lucide-react'
 
 export default function SettingsPage() {
@@ -28,7 +26,7 @@ export default function SettingsPage() {
   const { user, signOut } = useAuth()
   const [saving, setSaving] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [syncing, setSyncing] = useState(false)
+  const [checking, setChecking] = useState(false)
   const [dbReady, setDbReady] = useState(null)
 
   useEffect(() => {
@@ -59,20 +57,17 @@ export default function SettingsPage() {
     }
   }
 
-  const handleSync = async () => {
-    setSyncing(true)
+  const handleCheckDatabase = async () => {
+    setChecking(true)
     try {
-      const res = await syncLocalDataToSupabase()
-      if (res.success) {
-        toast(res.message, 'success')
-        setDbReady(true)
-      } else {
-        toast(res.message, 'info')
-      }
+      const res = await checkDatabaseSchema()
+      setDbReady(res.ready)
+      toast(res.ready ? 'Database connection is working' : 'Could not connect to the database', res.ready ? 'success' : 'error')
     } catch (error) {
-      toast(`Sync failed: ${error.message}`, 'error')
+      setDbReady(false)
+      toast(`Database check failed: ${error.message}`, 'error')
     } finally {
-      setSyncing(false)
+      setChecking(false)
     }
   }
 
@@ -126,7 +121,7 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between px-0.5">
             <h2 className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider flex items-center gap-1">
               <Database className="w-3 h-3" />
-              <span>Database & Sync</span>
+              <span>Database</span>
             </h2>
             <span
               className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${
@@ -135,15 +130,15 @@ export default function SettingsPage() {
                   : 'bg-amber-50 text-amber-700 border-amber-200'
               }`}
             >
-              {dbReady ? 'Connected' : 'Local Mode'}
+              {dbReady ? 'Connected' : 'Disconnected'}
             </span>
           </div>
 
           <div className="bg-white rounded-2xl p-3.5 border border-neutral-200/60 shadow-card space-y-3">
             <p className="text-[11px] text-neutral-600 leading-relaxed">
               {dbReady
-                ? 'Supabase cloud database is active and in sync.'
-                : 'Data is saved locally. To enable sync, paste the migration SQL into your Supabase SQL editor.'}
+                ? 'Business records are loaded from the shared Supabase database.'
+                : 'Business records are not loaded from this device. Reconnect to Supabase to view or save data.'}
             </p>
 
             <div className="grid grid-cols-2 gap-2">
@@ -167,12 +162,12 @@ export default function SettingsPage() {
             </div>
 
             <button
-              onClick={handleSync}
-              disabled={syncing}
+              onClick={handleCheckDatabase}
+              disabled={checking}
               className="w-full py-2 rounded-xl border border-neutral-200 bg-neutral-50 hover:bg-neutral-100 text-neutral-800 text-[10px] font-bold flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all disabled:opacity-50"
             >
-              <RefreshCw className={`w-3 h-3 ${syncing ? 'animate-spin' : ''}`} />
-              <span>{syncing ? 'Verifying...' : 'Check & Sync'}</span>
+              <RefreshCw className={`w-3 h-3 ${checking ? 'animate-spin' : ''}`} />
+              <span>{checking ? 'Checking...' : 'Check Database'}</span>
             </button>
           </div>
         </div>

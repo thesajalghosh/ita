@@ -245,7 +245,6 @@ CREATE TABLE IF NOT EXISTS ita_sales (
   note TEXT,
   week_start_date DATE NOT NULL,
   week_end_date DATE NOT NULL,
-  source_entry_id UUID UNIQUE,
   is_deleted BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -282,7 +281,6 @@ CREATE TABLE IF NOT EXISTS ita_payments (
   amount NUMERIC NOT NULL CHECK (amount > 0),
   week_start_date DATE NOT NULL,
   week_end_date DATE NOT NULL,
-  source_entry_id UUID UNIQUE,
   note TEXT,
   is_deleted BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW(),

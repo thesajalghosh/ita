@@ -48,7 +48,7 @@ export default function AddPersonPage() {
 
     setLoading(true)
     try {
-      const { data: person, error, localFallback } = await createPerson({
+      const { data: person, error } = await createPerson({
         name: name.trim(),
         category: currentCategory.id,
         phone: phone.trim() || null,
@@ -63,11 +63,7 @@ export default function AddPersonPage() {
         currentCategory.id
       )
 
-      if (localFallback) {
-        toast(`${name} added to ${currentCategory.name} (saved locally)`, 'success')
-      } else {
-        toast(`${name} added to ${currentCategory.name}`, 'success')
-      }
+      toast(`${name} added to ${currentCategory.name}`, 'success')
       if (calculationsError) {
         toast(`Person saved, but default columns could not be created: ${calculationsError.message}`, 'warning')
       }

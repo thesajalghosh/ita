@@ -33,17 +33,14 @@ A complete, mobile-first brick kiln accounting management web application built 
 
 ## Supabase Database Setup
 
-Run `supabase/migrations/001_initial_schema.sql` and then
-`supabase/migrations/002_ita_sales_payments.sql` and
-`supabase/migrations/003_idempotent_ita_legacy_import.sql` in the Supabase SQL Editor.
-The ITA Sell weekly details page needs the `ita_sales` and `ita_payments` tables
-from the second migration. The third migration prevents legacy entries from being
-imported more than once, including when multiple devices open the same person;
-deploying the frontend alone does not apply database migrations.
-
-To clean up existing exact duplicate active ITA sales/payments while keeping the
-oldest copy, also run `supabase/migrations/004_remove_exact_ita_duplicates.sql`.
-It reports the number of duplicate sales and payments removed.
+The Supabase database schema is available from the app's Settings page using
+**Copy SQL**. Run that SQL in the SQL Editor of the Supabase project connected to
+the app only when setting up a new, empty Supabase project. Do not rerun the
+setup SQL against a populated project. Vercel deploys only the frontend and does
+not create database tables.
+Business data is read from and written to Supabase; the app does not use
+browser-local business records as a fallback. If Supabase is unavailable, the
+app displays a connection warning and does not save new records locally.
 
 The frontend is a static Vercel deployment; Supabase is the separate authentication and database service. App code can retry database requests and keep the app shell available offline, but it cannot guarantee uptime for Vercel, Supabase, or the user's network. Check both providers' project status and service limits if cloud data is unavailable.
 

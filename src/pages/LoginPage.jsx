@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { toast } from '../components/Toast'
-import { Loader2, Building2, Eye, EyeOff, Sparkles } from 'lucide-react'
+import { Loader2, Building2, Eye, EyeOff } from 'lucide-react'
 
 export default function LoginPage() {
-  const { signIn, signUp, signInOffline } = useAuth()
+  const { signIn, signUp } = useAuth()
   const [isLogin, setIsLogin] = useState(true)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -153,17 +153,6 @@ export default function LoginPage() {
               )}
             </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                signInOffline()
-                toast('Logged in as Admin (Local Mode)', 'success')
-              }}
-              className="w-full py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 hover:bg-neutral-100 text-neutral-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
-            >
-              <Building2 className="w-3.5 h-3.5 text-neutral-500" />
-              <span>Instant Access as Admin</span>
-            </button>
           </form>
 
           <div className="mt-5 pt-4 border-t border-neutral-100 text-center">

@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
-import { isTableMissingError } from '../lib/api'
+import { reportDatabaseStatus } from '../lib/api'
 
 const SettingsContext = createContext({})
 
@@ -9,28 +9,10 @@ export function useSettings() {
   return useContext(SettingsContext)
 }
 
-const LOCAL_SETTINGS_KEY = 'ita_app_settings'
 const DEFAULT_SETTINGS = {
   allow_edit: false,
   allow_delete: false,
   show_add_column: true,
-}
-
-function getLocalSettings(userId) {
-  try {
-    const raw = localStorage.getItem(`${LOCAL_SETTINGS_KEY}_${userId || 'default'}`)
-    return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : DEFAULT_SETTINGS
-  } catch {
-    return DEFAULT_SETTINGS
-  }
-}
-
-function setLocalSettings(userId, settings) {
-  try {
-    localStorage.setItem(`${LOCAL_SETTINGS_KEY}_${userId || 'default'}`, JSON.stringify(settings))
-  } catch {
-    // Ignore
-  }
 }
 
 export function SettingsProvider({ children }) {
@@ -40,11 +22,6 @@ export function SettingsProvider({ children }) {
 
   const fetchSettings = useCallback(async () => {
     if (!user) {
-      setLoading(false)
-      return
-    }
-    if (user.is_offline) {
-      setSettings(getLocalSettings(user.id))
       setLoading(false)
       return
     }
@@ -59,33 +36,28 @@ export function SettingsProvider({ children }) {
 
       if (error && error.code === 'PGRST116') {
         // No settings row, create one
-        const { data: newData } = await supabase
+        const { data: newData, error: insertError } = await supabase
           .from('app_settings')
           .insert({ user_id: user.id, allow_edit: false, allow_delete: false })
           .select()
           .single()
-        if (newData) {
-          setSettings({
-            ...newData,
-            show_add_column: getLocalSettings(user.id).show_add_column,
-          })
+        if (insertError) {
+          reportDatabaseStatus(true)
+          setSettings(DEFAULT_SETTINGS)
+        } else if (newData) {
+          setSettings({ ...DEFAULT_SETTINGS, ...newData })
         }
-      } else if (error && isTableMissingError(error)) {
-        // Table not found in schema cache - fallback to local storage
-        const local = getLocalSettings(user.id)
-        setSettings(local)
+      } else if (error) {
+        reportDatabaseStatus(true)
+        setSettings(DEFAULT_SETTINGS)
       } else if (data) {
-        setSettings({
-          ...data,
-          show_add_column: getLocalSettings(user.id).show_add_column,
-        })
+        setSettings({ ...DEFAULT_SETTINGS, ...data })
       } else {
-        const local = getLocalSettings(user.id)
-        setSettings(local)
+        setSettings(DEFAULT_SETTINGS)
       }
     } catch {
-      const local = getLocalSettings(user?.id)
-      setSettings(local)
+      reportDatabaseStatus(true)
+      setSettings(DEFAULT_SETTINGS)
     } finally {
       setLoading(false)
     }
@@ -97,17 +69,14 @@ export function SettingsProvider({ children }) {
 
   const updateSettings = async (updates) => {
     const newSettings = { ...settings, ...updates }
-    setSettings(newSettings)
-    if (user?.id) {
-      setLocalSettings(user.id, newSettings)
-    }
 
-    if (!user || user.is_offline) return { data: newSettings, error: null }
+    if (!user) return { data: null, error: new Error('Please sign in to update settings.') }
 
     const cloudUpdates = Object.fromEntries(
       Object.entries(updates).filter(([key]) => key !== 'show_add_column')
     )
     if (Object.keys(cloudUpdates).length === 0) {
+      setSettings(newSettings)
       return { data: newSettings, error: null }
     }
 
@@ -128,13 +97,11 @@ export function SettingsProvider({ children }) {
         return { data: mergedSettings, error: null }
       }
 
-      if (error && isTableMissingError(error)) {
-        return { data: newSettings, error: null }
-      }
-
-      return { data: newSettings, error: null }
-    } catch {
-      return { data: newSettings, error: null }
+      reportDatabaseStatus(true)
+      return { data: null, error: error || new Error('Database did not update settings.') }
+    } catch (error) {
+      reportDatabaseStatus(true)
+      return { data: null, error }
     }
   }
 

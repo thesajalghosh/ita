@@ -17,7 +17,6 @@ import {
   createItaPayment,
   updateItaPayment,
   softDeleteItaPayment,
-  migrateLegacyItaSellEntries,
 } from '../lib/api'
 import { useSettings } from '../contexts/SettingsContext'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -48,7 +47,6 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
   const [payments, setPayments] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
-  const [usingLocalData, setUsingLocalData] = useState(false)
 
   // Expanded weeks state (object map of weekStart -> boolean)
   const [expandedWeeks, setExpandedWeeks] = useState({})
@@ -82,7 +80,6 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
   const loadData = useCallback(async () => {
     setLoading(true)
     setLoadError(null)
-    setUsingLocalData(false)
     try {
       const [salesRes, paymentsRes] = await Promise.all([
         getItaSalesByPerson(person.id),
@@ -91,36 +88,12 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
 
       setSales(salesRes.data || [])
       setPayments(paymentsRes.data || [])
-      setUsingLocalData(Boolean(salesRes.localFallback || paymentsRes.localFallback))
       const readError = salesRes.error || paymentsRes.error
       if (readError) {
         setLoadError(readError.message || 'The ITA sales data could not be loaded.')
         return
       }
 
-      // Reuse the initial read so a normal refresh does not issue duplicate requests.
-      const migrationResult = await migrateLegacyItaSellEntries(person.id, {
-        salesResult: salesRes,
-        paymentsResult: paymentsRes,
-      })
-      if (migrationResult.migrated) {
-        const [updatedSales, updatedPayments] = await Promise.all([
-          getItaSalesByPerson(person.id),
-          getItaPaymentsByPerson(person.id),
-        ])
-        setSales(updatedSales.data || [])
-        setPayments(updatedPayments.data || [])
-        setUsingLocalData(Boolean(updatedSales.localFallback || updatedPayments.localFallback))
-        if (updatedSales.error || updatedPayments.error) {
-          setLoadError((updatedSales.error || updatedPayments.error).message || 'The ITA sales data could not be loaded.')
-          return
-        }
-      }
-
-      const error = migrationResult.error
-      if (error) {
-        setLoadError(error.message || 'The ITA sales data could not be loaded.')
-      }
     } catch (err) {
       setLoadError(err.message || 'The ITA sales data could not be loaded.')
     } finally {
@@ -403,7 +376,7 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
         toast('Sale record updated', 'success')
         setShowEditSale(null)
       } else {
-        const { error, localFallback } = await createItaSale({
+        const { error } = await createItaSale({
           person_id: person.id,
           sale_date: saleDate,
           quantity: qty,
@@ -414,12 +387,7 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
           week_end_date: weekRange.end,
         })
         if (error) throw error
-        toast(
-          localFallback
-            ? 'Sale saved on this device and will sync when online'
-            : 'Sale entry saved successfully',
-          localFallback ? 'warning' : 'success'
-        )
+        toast('Sale entry saved successfully', 'success')
         setShowAddSale(false)
         // Automatically expand this week
         setExpandedWeeks((prev) => ({ ...prev, [weekRange.start]: true }))
@@ -543,7 +511,7 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
         )
         setShowEditPayment(null)
       } else {
-        const { error, localFallback } = await createItaPayment({
+        const { error } = await createItaPayment({
           person_id: person.id,
           payment_date: paymentDate,
           amount: amt,
@@ -553,12 +521,10 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
         })
         if (error) throw error
         toast(
-          localFallback
-            ? 'Payment saved on this device and will sync when online'
-            : isExcess
-              ? 'Payment saved! Excess amount automatically added to next remaining week.'
-              : 'Payment saved successfully',
-          localFallback ? 'warning' : 'success'
+          isExcess
+            ? 'Payment saved! Excess amount automatically added to next remaining week.'
+            : 'Payment saved successfully',
+          'success'
         )
         setShowAddPayment(null)
         // Automatically expand the week where payment was posted
@@ -690,7 +656,7 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
             <p className="font-bold">Could not refresh ITA sales</p>
             <p className="mt-1 break-words">{loadError}</p>
             <p className="mt-1 text-[10px] text-rose-700">
-              Check your connection and confirm the ITA sales migration has been applied in Supabase.
+              Check your connection and verify the ITA tables exist in the connected Supabase project.
             </p>
           </div>
           <button
@@ -702,12 +668,6 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
             <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} />
             Retry
           </button>
-        </div>
-      )}
-
-      {usingLocalData && !loadError && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] text-amber-800">
-          Showing data saved on this device. Cloud data may be unavailable until the connection is restored.
         </div>
       )}
 

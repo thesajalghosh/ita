@@ -1,6 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { syncLocalDataToSupabase } from '../lib/api'
 
 function withAuthTimeout(promise, ms = 10000) {
   let timeoutId
@@ -23,19 +22,6 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Check if there is an offline/local session stored
-    const offlineRaw = localStorage.getItem('ita_offline_user')
-    if (offlineRaw) {
-      try {
-        const parsed = JSON.parse(offlineRaw)
-        if (parsed?.id) {
-          setUser(parsed)
-          setLoading(false)
-          return
-        }
-      } catch {}
-    }
-
     let isMounted = true
 
     // Safety timeout: Never let loading screen freeze for more than 1.5 seconds
@@ -78,38 +64,6 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  useEffect(() => {
-    if (!user || user.is_offline) return undefined
-
-    const syncPendingData = () => {
-      if (navigator.onLine) {
-        syncLocalDataToSupabase().catch((error) => {
-          console.error('Unable to sync offline data:', error)
-        })
-      }
-    }
-
-    syncPendingData()
-    window.addEventListener('online', syncPendingData)
-    const retryInterval = window.setInterval(syncPendingData, 60000)
-    return () => {
-      window.removeEventListener('online', syncPendingData)
-      window.clearInterval(retryInterval)
-    }
-  }, [user])
-
-  const signInOffline = (email = 'admin@brickkiln.local', name = 'Admin') => {
-    const offlineUser = {
-      id: 'default_user',
-      email: email || 'admin@brickkiln.local',
-      user_metadata: { full_name: name || 'Admin' },
-      is_offline: true,
-    }
-    localStorage.setItem('ita_offline_user', JSON.stringify(offlineUser))
-    setUser(offlineUser)
-    return { data: { user: offlineUser }, error: null }
-  }
-
   const signIn = async (email, password) => {
     try {
       const { data, error } = await withAuthTimeout(supabase.auth.signInWithPassword({
@@ -121,7 +75,6 @@ export function AuthProvider({ children }) {
         return { data, error }
       }
 
-      localStorage.removeItem('ita_offline_user')
       return { data, error: null }
     } catch (err) {
       return { data: null, error: err }
@@ -146,7 +99,6 @@ export function AuthProvider({ children }) {
   }
 
   const signOut = async () => {
-    localStorage.removeItem('ita_offline_user')
     try {
       await supabase.auth.signOut()
     } catch {}
@@ -159,7 +111,6 @@ export function AuthProvider({ children }) {
     loading,
     signUp,
     signIn,
-    signInOffline,
     signOut,
   }
 

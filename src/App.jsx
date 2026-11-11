@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { SettingsProvider } from './contexts/SettingsContext'
 import Toast from './components/Toast'
 import LoadingSpinner from './components/LoadingSpinner'
+import DatabaseNotice from './components/DatabaseNotice'
 import { supabaseMissing } from './lib/supabase'
 
 // Pages
@@ -149,7 +150,7 @@ VITE_SUPABASE_ANON_KEY=your-anon-key-here`}
 
         <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100">
           <p className="text-xs font-semibold text-amber-700 uppercase mb-2">Step 3 — Database Setup</p>
-          <p className="text-xs text-amber-800">Run the <strong>supabase/migrations/001_initial_schema.sql</strong> script in the Supabase SQL Editor.</p>
+          <p className="text-xs text-amber-800">Sign in with a Supabase account that has access to the configured project, then use <strong>Settings → Copy SQL</strong> and run the script in the Supabase SQL Editor.</p>
         </div>
 
         <p className="text-center text-xs text-gray-400 mt-5">
@@ -171,6 +172,7 @@ export default function App() {
         <SettingsProvider>
           <div className="max-w-lg mx-auto min-h-screen bg-neutral-50/70 text-neutral-900 relative shadow-sm">
             <Toast />
+            <DatabaseNotice />
             <AppRoutes />
           </div>
         </SettingsProvider>
