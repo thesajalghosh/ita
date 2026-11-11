@@ -11,4 +11,7 @@ export const supabase = createClient(supabaseUrl || 'https://placeholder.supabas
     persistSession: true,
     detectSessionInUrl: true,
   },
+  global: {
+    fetch: (input, init = {}) => fetch(input, { ...init, cache: 'no-store' }),
+  },
 })

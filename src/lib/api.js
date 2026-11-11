@@ -1429,16 +1429,7 @@ export async function getItaSalesByPerson(personId) {
     }
 
     if (data) {
-      const local = getLocalData('ita_sales')
-      return {
-        data: mergePendingRecords(
-          data,
-          local,
-          'sale_',
-          (sale) => sale.person_id === personId && sale.is_deleted !== true
-        ),
-        error: null,
-      }
+      return { data, error: null }
     }
 
     const local = getLocalData('ita_sales').filter(
@@ -1643,16 +1634,7 @@ export async function getItaPaymentsByPerson(personId) {
     }
 
     if (data) {
-      const local = getLocalData('ita_payments')
-      return {
-        data: mergePendingRecords(
-          data,
-          local,
-          'payment_',
-          (payment) => payment.person_id === personId && payment.is_deleted !== true
-        ),
-        error: null,
-      }
+      return { data, error: null }
     }
 
     const local = getLocalData('ita_payments').filter(
