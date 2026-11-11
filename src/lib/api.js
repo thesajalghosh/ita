@@ -810,12 +810,21 @@ export async function getEntriesByPerson(personId) {
       }
     })
     enriched.sort((a, b) => new Date(b.entry_date) - new Date(a.entry_date))
-    return { data: enriched, error: null }
-  } catch {
+    return { data: enriched, error }
+  } catch (error) {
     const localEntries = getLocalData('entries').filter(
       (e) => e.person_id === personId && e.is_deleted !== true
     )
-    return { data: localEntries, error: null }
+    const localCalcs = getLocalData('calculations')
+    const enriched = localEntries.map((e) => {
+      const c = localCalcs.find((calc) => calc.id === e.calculation_id)
+      return {
+        ...e,
+        calculations: c ? { name: c.name, calc_type: c.calc_type } : null,
+      }
+    })
+    enriched.sort((a, b) => new Date(b.entry_date) - new Date(a.entry_date))
+    return { data: enriched, error, localFallback: true }
   }
 }
 
@@ -1416,7 +1425,7 @@ export async function getItaSalesByPerson(personId) {
         (s) => s.person_id === personId && s.is_deleted !== true
       )
       local.sort((a, b) => new Date(b.sale_date) - new Date(a.sale_date))
-      return { data: local, error: null }
+      return { data: local, error, localFallback: true }
     }
 
     if (data) {
@@ -1436,13 +1445,13 @@ export async function getItaSalesByPerson(personId) {
       (s) => s.person_id === personId && s.is_deleted !== true
     )
     local.sort((a, b) => new Date(b.sale_date) - new Date(a.sale_date))
-    return { data: local, error: null }
-  } catch {
+    return { data: local, error }
+  } catch (error) {
     const local = getLocalData('ita_sales').filter(
       (s) => s.person_id === personId && s.is_deleted !== true
     )
     local.sort((a, b) => new Date(b.sale_date) - new Date(a.sale_date))
-    return { data: local, error: null }
+    return { data: local, error, localFallback: true }
   }
 }
 
@@ -1521,12 +1530,12 @@ export async function updateItaSale(saleId, updates) {
       extra.week_end_date = weekRange.end
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await withTimeout(supabase
       .from('ita_sales')
       .update({ ...updates, ...extra, updated_at: new Date().toISOString() })
       .eq('id', saleId)
       .select()
-      .single()
+      .single())
 
     if (error && isTableMissingError(error)) {
       notifyDbStatus(true)
@@ -1539,18 +1548,9 @@ export async function updateItaSale(saleId, updates) {
       }
     }
 
-    if (data) {
-      const local = getLocalData('ita_payments')
-      return {
-        data: mergePendingRecords(
-          data,
-          local,
-          'payment_',
-          (payment) => payment.person_id === personId && payment.is_deleted !== true
-        ),
-        error: null,
-      }
-    }
+    if (data) return { data, error: null }
+
+    if (error && !isTableMissingError(error)) return { data: null, error }
 
     const local = getLocalData('ita_sales')
     const idx = local.findIndex((s) => s.id === saleId)
@@ -1562,6 +1562,8 @@ export async function updateItaSale(saleId, updates) {
 
     return { data: null, error }
   } catch (err) {
+    if (!isTableMissingError(err)) return { data: null, error: err }
+    notifyDbStatus(true)
     const local = getLocalData('ita_sales')
     const idx = local.findIndex((s) => s.id === saleId)
     if (idx !== -1) {
@@ -1575,12 +1577,12 @@ export async function updateItaSale(saleId, updates) {
 
 export async function softDeleteItaSale(saleId) {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await withTimeout(supabase
       .from('ita_sales')
       .update({ is_deleted: true, updated_at: new Date().toISOString() })
       .eq('id', saleId)
       .select()
-      .single()
+      .single())
 
     if (error && isTableMissingError(error)) {
       notifyDbStatus(true)
@@ -1593,6 +1595,7 @@ export async function softDeleteItaSale(saleId) {
       }
     }
 
+    if (error && !isTableMissingError(error)) return { data: null, error }
     if (data) return { data, error: null }
 
     const local = getLocalData('ita_sales')
@@ -1605,6 +1608,8 @@ export async function softDeleteItaSale(saleId) {
 
     return { data: null, error }
   } catch (err) {
+    if (!isTableMissingError(err)) return { data: null, error: err }
+    notifyDbStatus(true)
     const local = getLocalData('ita_sales')
     const idx = local.findIndex((s) => s.id === saleId)
     if (idx !== -1) {
@@ -1634,7 +1639,7 @@ export async function getItaPaymentsByPerson(personId) {
         (p) => p.person_id === personId && p.is_deleted !== true
       )
       local.sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date))
-      return { data: local, error: null }
+      return { data: local, error, localFallback: true }
     }
 
     if (data) {
@@ -1654,13 +1659,13 @@ export async function getItaPaymentsByPerson(personId) {
       (p) => p.person_id === personId && p.is_deleted !== true
     )
     local.sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date))
-    return { data: local, error: null }
-  } catch {
+    return { data: local, error }
+  } catch (error) {
     const local = getLocalData('ita_payments').filter(
       (p) => p.person_id === personId && p.is_deleted !== true
     )
     local.sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date))
-    return { data: local, error: null }
+    return { data: local, error, localFallback: true }
   }
 }
 
@@ -1726,12 +1731,12 @@ export async function createItaPayment(paymentData) {
 
 export async function updateItaPayment(paymentId, updates) {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await withTimeout(supabase
       .from('ita_payments')
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq('id', paymentId)
       .select()
-      .single()
+      .single())
 
     if (error && isTableMissingError(error)) {
       notifyDbStatus(true)
@@ -1744,6 +1749,7 @@ export async function updateItaPayment(paymentId, updates) {
       }
     }
 
+    if (error && !isTableMissingError(error)) return { data: null, error }
     if (data) return { data, error: null }
 
     const local = getLocalData('ita_payments')
@@ -1756,6 +1762,8 @@ export async function updateItaPayment(paymentId, updates) {
 
     return { data: null, error }
   } catch (err) {
+    if (!isTableMissingError(err)) return { data: null, error: err }
+    notifyDbStatus(true)
     const local = getLocalData('ita_payments')
     const idx = local.findIndex((p) => p.id === paymentId)
     if (idx !== -1) {
@@ -1769,12 +1777,12 @@ export async function updateItaPayment(paymentId, updates) {
 
 export async function softDeleteItaPayment(paymentId) {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await withTimeout(supabase
       .from('ita_payments')
       .update({ is_deleted: true, updated_at: new Date().toISOString() })
       .eq('id', paymentId)
       .select()
-      .single()
+      .single())
 
     if (error && isTableMissingError(error)) {
       notifyDbStatus(true)
@@ -1787,6 +1795,7 @@ export async function softDeleteItaPayment(paymentId) {
       }
     }
 
+    if (error && !isTableMissingError(error)) return { data: null, error }
     if (data) return { data, error: null }
 
     const local = getLocalData('ita_payments')
@@ -1799,6 +1808,8 @@ export async function softDeleteItaPayment(paymentId) {
 
     return { data: null, error }
   } catch (err) {
+    if (!isTableMissingError(err)) return { data: null, error: err }
+    notifyDbStatus(true)
     const local = getLocalData('ita_payments')
     const idx = local.findIndex((p) => p.id === paymentId)
     if (idx !== -1) {
@@ -1811,17 +1822,28 @@ export async function softDeleteItaPayment(paymentId) {
 }
 
 // Automatically migrate legacy entries for an ita_sell person into ita_sales and ita_payments
-export async function migrateLegacyItaSellEntries(personId) {
+export async function migrateLegacyItaSellEntries(personId, existingResults = null) {
   try {
-    const { data: sales } = await getItaSalesByPerson(personId)
-    const { data: payments } = await getItaPaymentsByPerson(personId)
+    const [salesResult, paymentsResult] = existingResults
+      ? [existingResults.salesResult, existingResults.paymentsResult]
+      : await Promise.all([
+          getItaSalesByPerson(personId),
+          getItaPaymentsByPerson(personId),
+        ])
+    if (salesResult.error || paymentsResult.error) {
+      return { migrated: false, error: salesResult.error || paymentsResult.error }
+    }
+
+    const { data: sales } = salesResult
+    const { data: payments } = paymentsResult
 
     // Only migrate if no sales or payments exist yet for this person
     if ((sales && sales.length > 0) || (payments && payments.length > 0)) {
       return { migrated: false }
     }
 
-    const { data: entries } = await getEntriesByPerson(personId)
+    const { data: entries, error: entriesError } = await getEntriesByPerson(personId)
+    if (entriesError) return { migrated: false, error: entriesError }
     if (!entries || entries.length === 0) {
       return { migrated: false }
     }
@@ -1838,7 +1860,7 @@ export async function migrateLegacyItaSellEntries(personId) {
         const rate = e.amount ? (Number(e.amount) / (qty / 1000)) : 120
         const salesAmt = Number(e.amount) || ((qty / 1000) * rate)
 
-        await createItaSale({
+        const { error } = await createItaSale({
           person_id: personId,
           sale_date: e.entry_date,
           quantity: qty,
@@ -1848,10 +1870,11 @@ export async function migrateLegacyItaSellEntries(personId) {
           week_start_date: weekRange.start,
           week_end_date: weekRange.end,
         })
+        if (error) return { migrated: false, error }
         salesAdded++
       } else if (e.amount && Number(e.amount) > 0) {
         // Payment entry
-        await createItaPayment({
+        const { error } = await createItaPayment({
           person_id: personId,
           payment_date: e.entry_date,
           amount: Number(e.amount),
@@ -1859,6 +1882,7 @@ export async function migrateLegacyItaSellEntries(personId) {
           week_end_date: weekRange.end,
           note: e.description || (e.calculations?.name ? `From ${e.calculations.name}` : null),
         })
+        if (error) return { migrated: false, error }
         paymentsAdded++
       }
     }

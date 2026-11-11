@@ -31,6 +31,13 @@ A complete, mobile-first brick kiln accounting management web application built 
    - `VITE_SUPABASE_ANON_KEY` = your Supabase anon/public key
 3. Deploy! Vercel will build and serve the application automatically.
 
+## Supabase Database Setup
+
+Run `supabase/migrations/001_initial_schema.sql` and then
+`supabase/migrations/002_ita_sales_payments.sql` in the Supabase SQL Editor.
+The ITA Sell weekly details page needs the `ita_sales` and `ita_payments` tables
+from the second migration; deploying the frontend alone does not create them.
+
 The frontend is a static Vercel deployment; Supabase is the separate authentication and database service. App code can retry database requests and keep the app shell available offline, but it cannot guarantee uptime for Vercel, Supabase, or the user's network. Check both providers' project status and service limits if cloud data is unavailable.
 
 If a database request fails while signed in, new records are kept in that browser's local storage and automatically retried when connectivity returns. They are not visible on another device until the sync succeeds. Use the same Supabase account on each device; the explicit local-access option is device-local and is not a cloud account.

@@ -97,6 +97,15 @@ export default function PersonPage() {
       return
     }
 
+    if (p.category === 'ita_sell') {
+      setCalculations([])
+      setEntriesMap({})
+      setFinancialSummary(null)
+      setQuantitySummary({})
+      setLoading(false)
+      return
+    }
+
     const { data: calcs } = await getCalculationsByPerson(personId)
     // Auto-update legacy "Other Materials" column to "Mola Material"
     if (calcs && calcs.length > 0) {

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import {
   formatCurrency,
   formatNumber,
@@ -25,6 +25,7 @@ import Modal from '../components/Modal'
 import { toast } from '../components/Toast'
 import {
   Plus,
+  RefreshCw,
   ChevronDown,
   ChevronUp,
   Calendar,
@@ -46,6 +47,8 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
   const [sales, setSales] = useState([])
   const [payments, setPayments] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(null)
+  const [usingLocalData, setUsingLocalData] = useState(false)
 
   // Expanded weeks state (object map of weekStart -> boolean)
   const [expandedWeeks, setExpandedWeeks] = useState({})
@@ -76,12 +79,11 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
   const [saving, setSaving] = useState(false)
 
   // Load Sales and Payments
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true)
+    setLoadError(null)
+    setUsingLocalData(false)
     try {
-      // Auto-migrate legacy entries if any
-      await migrateLegacyItaSellEntries(person.id)
-
       const [salesRes, paymentsRes] = await Promise.all([
         getItaSalesByPerson(person.id),
         getItaPaymentsByPerson(person.id),
@@ -89,18 +91,48 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
 
       setSales(salesRes.data || [])
       setPayments(paymentsRes.data || [])
+      setUsingLocalData(Boolean(salesRes.localFallback || paymentsRes.localFallback))
+      const readError = salesRes.error || paymentsRes.error
+      if (readError) {
+        setLoadError(readError.message || 'The ITA sales data could not be loaded.')
+        return
+      }
+
+      // Reuse the initial read so a normal refresh does not issue duplicate requests.
+      const migrationResult = await migrateLegacyItaSellEntries(person.id, {
+        salesResult: salesRes,
+        paymentsResult: paymentsRes,
+      })
+      if (migrationResult.migrated) {
+        const [updatedSales, updatedPayments] = await Promise.all([
+          getItaSalesByPerson(person.id),
+          getItaPaymentsByPerson(person.id),
+        ])
+        setSales(updatedSales.data || [])
+        setPayments(updatedPayments.data || [])
+        setUsingLocalData(Boolean(updatedSales.localFallback || updatedPayments.localFallback))
+        if (updatedSales.error || updatedPayments.error) {
+          setLoadError((updatedSales.error || updatedPayments.error).message || 'The ITA sales data could not be loaded.')
+          return
+        }
+      }
+
+      const error = migrationResult.error
+      if (error) {
+        setLoadError(error.message || 'The ITA sales data could not be loaded.')
+      }
     } catch (err) {
-      toast('Failed to load ITA sales: ' + err.message, 'error')
+      setLoadError(err.message || 'The ITA sales data could not be loaded.')
     } finally {
       setLoading(false)
     }
-  }
+  }, [person.id])
 
   useEffect(() => {
     if (person?.id) {
       loadData()
     }
-  }, [person?.id])
+  }, [person?.id, loadData])
 
   // Calculated Sales Amount preview in Sale modal
   const calculatedSaleAmount = useMemo(() => {
@@ -649,6 +681,36 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
         </div>
       </div>
 
+      {loadError && (
+        <div
+          role="alert"
+          className="flex items-start justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800"
+        >
+          <div className="min-w-0">
+            <p className="font-bold">Could not refresh ITA sales</p>
+            <p className="mt-1 break-words">{loadError}</p>
+            <p className="mt-1 text-[10px] text-rose-700">
+              Check your connection and confirm the ITA sales migration has been applied in Supabase.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={loadData}
+            disabled={loading}
+            className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-white px-2.5 py-1.5 font-semibold text-rose-700 shadow-sm transition hover:bg-rose-100 disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} />
+            Retry
+          </button>
+        </div>
+      )}
+
+      {usingLocalData && !loadError && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] text-amber-800">
+          Showing data saved on this device. Cloud data may be unavailable until the connection is restored.
+        </div>
+      )}
+
       {/* ═══════════════════════════════════════════════════════════════
           ACTION BUTTONS ROW
           ═══════════════════════════════════════════════════════════════ */}
@@ -684,6 +746,16 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
               {filteredWeeks.length} {filteredWeeks.length === 1 ? 'week' : 'weeks'}
             </span>
           </div>
+          <button
+            type="button"
+            onClick={loadData}
+            disabled={loading}
+            aria-label="Refresh ITA sales"
+            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-semibold text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900 disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
 
           {/* Filter Pills */}
           <div className="flex items-center gap-0.5 bg-neutral-100/80 p-0.5 rounded-lg border border-neutral-200/60">
@@ -713,6 +785,10 @@ export default function ItaSellWeeklyView({ person, onRefreshDashboard }) {
             ═══════════════════════════════════════════════════════════════ */}
         {loading ? (
           <div className="py-8 text-center text-xs text-neutral-400">Loading weekly sales...</div>
+        ) : filteredWeeks.length === 0 && loadError ? (
+          <div className="rounded-xl border border-dashed border-rose-200 bg-rose-50/60 px-3 py-6 text-center text-xs text-rose-700">
+            Weekly records are unavailable until the data connection is restored.
+          </div>
         ) : filteredWeeks.length === 0 ? (
           <div className="text-center py-8 px-3 bg-neutral-50/60 rounded-xl border border-dashed border-neutral-200">
             <p className="text-xs font-medium text-neutral-600 mb-1">
