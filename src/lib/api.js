@@ -1326,7 +1326,7 @@ async function performLocalDataSync() {
     if (sale.id?.startsWith('sale_')) {
       const { data, error } = await withTimeout(supabase
         .from('ita_sales')
-        .insert({
+        .upsert({
           person_id: personIdMap[sale.person_id] || sale.person_id,
           user_id: userId,
           sale_date: sale.sale_date,
@@ -1336,10 +1336,11 @@ async function performLocalDataSync() {
           note: sale.note || null,
           week_start_date: sale.week_start_date,
           week_end_date: sale.week_end_date,
+          source_entry_id: sale.source_entry_id || null,
           is_deleted: sale.is_deleted === true,
-        })
+        }, { onConflict: 'source_entry_id', ignoreDuplicates: true })
         .select()
-        .single())
+        .maybeSingle())
       if (!error && data) {
         sale.id = data.id
         sale.person_id = data.person_id
@@ -1355,18 +1356,19 @@ async function performLocalDataSync() {
     if (payment.id?.startsWith('payment_')) {
       const { data, error } = await withTimeout(supabase
         .from('ita_payments')
-        .insert({
+        .upsert({
           person_id: personIdMap[payment.person_id] || payment.person_id,
           user_id: userId,
           payment_date: payment.payment_date,
           amount: payment.amount,
           week_start_date: payment.week_start_date,
           week_end_date: payment.week_end_date,
+          source_entry_id: payment.source_entry_id || null,
           note: payment.note || null,
           is_deleted: payment.is_deleted === true,
-        })
+        }, { onConflict: 'source_entry_id', ignoreDuplicates: true })
         .select()
-        .single())
+        .maybeSingle())
       if (!error && data) {
         payment.id = data.id
         payment.person_id = data.person_id
@@ -1465,11 +1467,12 @@ export async function createItaSale(saleData) {
       return saveLocalRecord('ita_sales', 'sale_', payload, { is_deleted: false })
     }
 
-    const { data, error } = await withTimeout(supabase
-      .from('ita_sales')
-      .insert(payload)
-      .select()
-      .single())
+    const saleQuery = payload.source_entry_id
+      ? supabase
+          .from('ita_sales')
+          .upsert(payload, { onConflict: 'source_entry_id', ignoreDuplicates: true })
+      : supabase.from('ita_sales').insert(payload)
+    const { data, error } = await withTimeout(saleQuery.select().maybeSingle())
 
     if (error && isTableMissingError(error)) {
       notifyDbStatus(true)
@@ -1667,11 +1670,12 @@ export async function createItaPayment(paymentData) {
       return saveLocalRecord('ita_payments', 'payment_', payload, { is_deleted: false })
     }
 
-    const { data, error } = await withTimeout(supabase
-      .from('ita_payments')
-      .insert(payload)
-      .select()
-      .single())
+    const paymentQuery = payload.source_entry_id
+      ? supabase
+          .from('ita_payments')
+          .upsert(payload, { onConflict: 'source_entry_id', ignoreDuplicates: true })
+      : supabase.from('ita_payments').insert(payload)
+    const { data, error } = await withTimeout(paymentQuery.select().maybeSingle())
 
     if (error && isTableMissingError(error)) {
       notifyDbStatus(true)
@@ -1859,6 +1863,7 @@ async function performLegacyItaSellMigration(personId, existingResults) {
 
         const { error } = await createItaSale({
           person_id: personId,
+          source_entry_id: e.id,
           sale_date: e.entry_date,
           quantity: qty,
           rate_per_thousand: Math.round(rate * 100) / 100,
@@ -1873,6 +1878,7 @@ async function performLegacyItaSellMigration(personId, existingResults) {
         // Payment entry
         const { error } = await createItaPayment({
           person_id: personId,
+          source_entry_id: e.id,
           payment_date: e.entry_date,
           amount: Number(e.amount),
           week_start_date: weekRange.start,
