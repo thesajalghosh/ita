@@ -1804,7 +1804,22 @@ export async function softDeleteItaPayment(paymentId) {
 }
 
 // Automatically migrate legacy entries for an ita_sell person into ita_sales and ita_payments
-export async function migrateLegacyItaSellEntries(personId, existingResults = null) {
+const legacyItaSellMigrations = new Map()
+
+export function migrateLegacyItaSellEntries(personId, existingResults = null) {
+  const inFlightMigration = legacyItaSellMigrations.get(personId)
+  if (inFlightMigration) return inFlightMigration
+
+  const migration = performLegacyItaSellMigration(personId, existingResults).finally(() => {
+    if (legacyItaSellMigrations.get(personId) === migration) {
+      legacyItaSellMigrations.delete(personId)
+    }
+  })
+  legacyItaSellMigrations.set(personId, migration)
+  return migration
+}
+
+async function performLegacyItaSellMigration(personId, existingResults) {
   try {
     const [salesResult, paymentsResult] = existingResults
       ? [existingResults.salesResult, existingResults.paymentsResult]
