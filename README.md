@@ -41,6 +41,10 @@ from the second migration. The third migration prevents legacy entries from bein
 imported more than once, including when multiple devices open the same person;
 deploying the frontend alone does not apply database migrations.
 
+To clean up existing exact duplicate active ITA sales/payments while keeping the
+oldest copy, also run `supabase/migrations/004_remove_exact_ita_duplicates.sql`.
+It reports the number of duplicate sales and payments removed.
+
 The frontend is a static Vercel deployment; Supabase is the separate authentication and database service. App code can retry database requests and keep the app shell available offline, but it cannot guarantee uptime for Vercel, Supabase, or the user's network. Check both providers' project status and service limits if cloud data is unavailable.
 
 If a database request fails while signed in, new records are kept in that browser's local storage and automatically retried when connectivity returns. They are not visible on another device until the sync succeeds. Use the same Supabase account on each device; the explicit local-access option is device-local and is not a cloud account.
